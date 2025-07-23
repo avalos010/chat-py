@@ -5,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from typing import Optional, List
 from datetime import datetime, timedelta
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError
 import jwt
 from models.auth import MsgPayload, MessageResponse
@@ -33,6 +34,7 @@ connections: List[WebSocket] = []
 # In-memory storage for messages
 messages_list: dict[int, MsgPayload] = {}
 
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> Optional[User]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -42,6 +44,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> Optional[User
         return User(**fake_users_db[username])
     except JWTError:
         return None
+    
+@app.get("/login")
+async def login(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.get("/signup")
+async def login(request: Request):
+    return templates.TemplateResponse("signup.html", {"request": request})
+
 
 
 @app.get("/")
