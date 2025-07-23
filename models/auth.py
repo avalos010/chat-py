@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Dict, Optional
 
 class Token(BaseModel):
     access_token: str
@@ -22,3 +22,15 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
+
+class LoginData(BaseModel):
+    username: str
+    password: str
+
+class MsgPayload(BaseModel):
+    message: str
+    sender: str
+    timestamp: float
+
+class MessageResponse(BaseModel):
+    messages: Dict[str, MsgPayload]

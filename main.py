@@ -1,13 +1,27 @@
 from fastapi import FastAPI, WebSocket, Depends, HTTPException, status, Request
+from fastapi.responses import RedirectResponse
+from fastapi.security import OAuth2PasswordBearer
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from models import MsgPayload
-# from models.auth import User, UserCreate, Token, LoginData
-# If 'auth.py' does not exist in 'models', either create it or import directly from 'models' if classes are there:
-from models import User, UserCreate, Token, LoginData
-from typing import List
+from typing import Optional, List
 from datetime import datetime, timedelta
+from jose import JWTError
 import jwt
+from models.auth import MsgPayload, MessageResponse
+
+from models.auth import LoginData, User, UserCreate, Token, UserInDB
+from utils.security import (
+    verify_token,
+    oauth2_scheme,
+    SECRET_KEY,
+    ALGORITHM,
+    create_access_token,
+    verify_password,
+    get_password_hash
+)
+
+# Fake database for development
+fake_users_db = {}
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -19,13 +33,28 @@ connections: List[WebSocket] = []
 # In-memory storage for messages
 messages_list: dict[int, MsgPayload] = {}
 
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> Optional[User]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        return User(**fake_users_db[username])
+    except JWTError:
+        return None
+
+
 @app.get("/")
-async def get(request: Request):
-    # Add user count or recent messages to the template
+async def root(request: Request, user: Optional[User] = Depends(get_current_user)):
+    if not user:
+        return templates.TemplateResponse("unauthorized.html", {
+            "request": request,
+            "message": "Please sign in to access the chat"
+        })
     return templates.TemplateResponse("chat.html", {
         "request": request,
         "active_users": len(connections),
-        "recent_messages": messages_list
+        "user": user
     })
 
 
@@ -52,18 +81,33 @@ def message_items() -> dict[str, dict[int, MsgPayload]]:
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    connections.append(websocket)
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: str = Depends(oauth2_scheme)
+):
     try:
-        while True:
-            data = await websocket.receive_text()
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            # Send formatted message with timestamp
-            for connection in connections:
-                await connection.send_text(f"[{timestamp}] {data}")
+        user = await get_current_user(token)
+        if not user:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+            
+        await websocket.accept()
+        connections.append(websocket)
+        try:
+            while True:
+                data = await websocket.receive_text()
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                message = f"[{timestamp}] {user.username}: {data}"
+                
+                for connection in connections:
+                    await connection.send_text(message)
+        except:
+            connections.remove(websocket)
     except:
-        connections.remove(websocket)
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+    finally:
+        if websocket in connections:
+            connections.remove(websocket)
 
 fake_users_db = {
     "johndoe": {
@@ -117,3 +161,4 @@ async def login_for_access_token(login_data: LoginData):
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
