@@ -16,11 +16,19 @@ document.addEventListener("DOMContentLoaded", () => {
   loginForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    const loginData: LoginData = {
-      username: formData.get("username") as string,
-      password: formData.get("password") as string,
-    };
+    const username = formData.get("username");
+    const password = formData.get("password");
 
+    if (typeof username !== "string") {
+      throw new Error("Username is required.");
+    }
+    if (typeof password !== "string") {
+      throw new Error("Password is required.");
+    }
+    const loginData: LoginData = {
+      username,
+      password,
+    };
     try {
       const response = await fetch("/token", {
         method: "POST",

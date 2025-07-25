@@ -9,7 +9,6 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError
 import jwt
 from models.auth import MsgPayload, MessageResponse
-
 from models.auth import LoginData, User, UserCreate, Token, UserInDB
 from utils.security import (
     verify_token,
@@ -21,13 +20,25 @@ from utils.security import (
     get_password_hash
 )
 
+from db import Database
+
 # Fake database for development
 fake_users_db = {}
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+db = Database("chat.db")
 
+@app.on_event("startup")
+async def on_startup():
+    print("Starting up!")
+    await db.connect()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    print("shutting down!")
+    await db.close()
 # Store active connections
 connections: List[WebSocket] = []
 
@@ -117,19 +128,7 @@ async def websocket_endpoint(
             connections.remove(websocket)
     except:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-    finally:
-        if websocket in connections:
-            connections.remove(websocket)
 
-fake_users_db = {
-    "johndoe": {
-        "username": "johndoe",
-        "full_name": "John Doe",
-        "email": "johndoe@example.com",
-        "hashed_password": "fakehashedsecret",
-        "disabled": False,
-    }
-}
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -148,10 +147,10 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, "secret", algorithm="HS256")
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
     return encoded_jwt
 
-async def authenticate_user(db, username: str, password: str):
+def authenticate_user(db, username: str, password: str):
     user = get_user(db, username)
     if not user:
         return False
@@ -161,7 +160,9 @@ async def authenticate_user(db, username: str, password: str):
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(login_data: LoginData):
-    user = authenticate_user(fake_users_db, login_data.username, login_data.password)
+    print(f"Login: {login_data}")
+
+    user = authenticate_user(db, login_data.username, login_data.password) #fake users_db for now
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
