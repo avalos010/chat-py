@@ -30,6 +30,6 @@ dist/
 
 # Project specific
 static/css/styles.css
-static/js/*.js
-!static/js/chat.js
+static/js/
+
 
