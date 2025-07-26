@@ -66,15 +66,13 @@ async def login(request: Request):
     return templates.TemplateResponse("signup.html", {"request": request})
 
 
-
+@app.exception_handler(401)
+async def unauthorized_exception_handler(request: Request, exc: Exception):
+    return templates.TemplateResponse("unauthorized.html", {"request": request, "message": "Unauthorized access"})
 @app.get("/")
 async def root(request: Request, user: Optional[User] = Depends(get_current_user)):
-    if not user:
-        return templates.TemplateResponse("unauthorized.html", {
-            "request": request,
-            "message": "Please sign in to access the chat"
-        })
-    return templates.TemplateResponse("chat.html", {
+    if user:
+      return templates.TemplateResponse("chat.html", {
         "request": request,
         "active_users": len(connections),
         "user": user
