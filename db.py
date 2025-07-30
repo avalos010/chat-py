@@ -2,6 +2,7 @@ import aiosqlite
 
 import os
 from dotenv import load_dotenv
+from utils.security import verify_password
 
 load_dotenv()
 
@@ -65,3 +66,11 @@ class Database:
                     return user
                 else:
                     return None
+
+
+    async def verify_password(self, username: str, password: str):
+        user = await self.get_user(username)
+        if not user:
+            return False
+        # Assuming you have a password hash stored in the database
+        return verify_password(password, user["password"])

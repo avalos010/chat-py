@@ -1,3 +1,4 @@
+from codecs import encode
 from fastapi import Body, FastAPI, WebSocket, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -32,7 +33,7 @@ fake_users_db = {}
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-db = Database("chat.db")
+db = Database()
 
 @app.on_event("startup")
 async def on_startup():
@@ -63,6 +64,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> Optional[User
 @app.get("/login")
 async def login(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    if not await db.verify_password(form_data.username, form_data.password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    # Generate a JWT token
+    token = encode({"sub": form_data.username}, "secret_key", algorithm="HS256")
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @app.get("/signup")
@@ -167,10 +176,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 def verify_password(plain_password, hashed_password):
     return plain_password == hashed_password
 
-def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return User(**user_dict)
+async def get_user(db, username: str):
+       return await db.get_user_by_username(username)
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
@@ -182,19 +189,19 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
     return encoded_jwt
 
-def authenticate_user(db, username: str, password: str):
-    user = get_user(db, username)
+async def authenticate_user(db, username: str, password: str):
+    user = await get_user(db, username)
     if not user:
         return False
-    if not verify_password(password, user.hashed_password):
+    if not verify_password(password, user[1]):
         return False
     return user
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(login_data: LoginData):
-    print(f"Login: {login_data}")
 
-    user = authenticate_user(db, login_data.username, login_data.password) #fake users_db for now
+    print(f"user logged in: {login_data.username}")
+    user = await authenticate_user(db, login_data.username, login_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -203,7 +210,6 @@ async def login_for_access_token(login_data: LoginData):
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user["username"]}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
-

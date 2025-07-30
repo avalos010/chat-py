@@ -7,6 +7,7 @@ interface SignupData {
   username: string;
   email: string;
   password: string;
+  confirmPassword: string;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -18,12 +19,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const formData = new FormData(e.target as HTMLFormElement);
     const username = formData.get("username");
     const password = formData.get("password");
-    const confirmPassword = formData.get("password2");
-
-    if (password !== confirmPassword) {
-      alert("Passwords do not match.");
-      throw new Error("Passwords do not match.");
-    }
 
     if (typeof username !== "string") {
       throw new Error("Username is required.");
@@ -63,7 +58,13 @@ document.addEventListener("DOMContentLoaded", () => {
       username: formData.get("username") as string,
       email: formData.get("email") as string,
       password: formData.get("password") as string,
+      confirmPassword: formData.get("password2") as string,
     };
+
+    if (signupData.password !== signupData.confirmPassword) {
+      alert("Passwords do not match.");
+      throw new Error("Passwords do not match.");
+    }
 
     try {
       const response = await fetch("/signup", {

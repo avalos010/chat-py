@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, SecretStr
 from typing import Dict, Optional
 
 class Token(BaseModel):
@@ -25,7 +25,7 @@ class UserCreate(BaseModel):
 
 class LoginData(BaseModel):
     username: str
-    password: str
+    password: SecretStr
 
 class MsgPayload(BaseModel):
     message: str
