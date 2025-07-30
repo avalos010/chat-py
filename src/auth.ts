@@ -18,6 +18,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const formData = new FormData(e.target as HTMLFormElement);
     const username = formData.get("username");
     const password = formData.get("password");
+    const confirmPassword = formData.get("password2");
+
+    if (password !== confirmPassword) {
+      alert("Passwords do not match.");
+      throw new Error("Passwords do not match.");
+    }
 
     if (typeof username !== "string") {
       throw new Error("Username is required.");
@@ -62,10 +68,10 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const response = await fetch("/signup", {
         method: "POST",
+        body: JSON.stringify(signupData),
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(signupData),
       });
 
       if (response.ok) {

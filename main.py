@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, Depends, HTTPException, status, Request
+from fastapi import Body, FastAPI, WebSocket, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.templating import Jinja2Templates
@@ -21,6 +21,10 @@ from utils.security import (
 )
 
 from db import Database
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 # Fake database for development
 fake_users_db = {}
@@ -34,7 +38,7 @@ db = Database("chat.db")
 async def on_startup():
     print("Starting up!")
     await db.connect()
-
+    await db.create_tables()
 @app.on_event("shutdown")
 async def on_shutdown():
     print("shutting down!")
@@ -64,6 +68,36 @@ async def login(request: Request):
 @app.get("/signup")
 async def login(request: Request):
     return templates.TemplateResponse("signup.html", {"request": request})
+
+
+@app.post("/signup", response_model=User)
+async def signup(user_create: UserCreate):
+    try:
+        # Validate the user data
+        await db.create_tables()
+        user = await db.get_user_by_username(user_create.username)
+        if user:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        user = await db.get_user_by_email(user_create.email)
+        if user:
+            raise HTTPException(status_code=400, detail="Email already exists")
+
+        # Hash the password
+        hashed_password = get_password_hash(user_create.password)
+
+        # Create a new user in the database
+        await db.execute("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", (user_create.username, user_create.email, hashed_password))
+        await db.commit()
+
+        # Return a redirect to the login page
+        return RedirectResponse(url="/login", status_code=302)
+    except Exception as e:
+        # Log the error and return a 500 response
+        logger.error(f"Error creating user: {e}")
+        raise HTTPException(status_code=500, detail="Error creating user")
+
+
+
 
 
 @app.exception_handler(401)
