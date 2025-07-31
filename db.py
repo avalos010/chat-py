@@ -2,6 +2,7 @@ import aiosqlite
 
 import os
 from dotenv import load_dotenv
+from models.auth import UserInDB
 from utils.security import verify_password
 
 load_dotenv()
@@ -52,11 +53,12 @@ class Database:
     async def get_user_by_username(self, username: str):
         async with aiosqlite.connect(self.db_name) as db:
             async with db.execute("SELECT * FROM users WHERE username = ?", (username,)) as cursor:
-                user = await cursor.fetchone()
-                if user:
-                    return user
-                else:
-                    return None
+                user_tuple = await cursor.fetchone()
+            if user_tuple:
+                user_dict = dict(zip(["id", "username", "email", "hashed_password"], user_tuple))
+                return UserInDB(**user_dict)
+            else:
+                return None
 
     async def get_user_by_email(self, email: str):
         async with aiosqlite.connect(self.db_name) as db:

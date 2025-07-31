@@ -6,6 +6,9 @@ from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import os
 from dotenv import load_dotenv
+from pydantic import SecretStr
+
+from models.auth import UserInDB
 
 # Load environment variables
 load_dotenv()
@@ -20,7 +23,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
-
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 

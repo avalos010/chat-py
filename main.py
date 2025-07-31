@@ -1,7 +1,6 @@
 from codecs import encode
 from fastapi import Body, FastAPI, WebSocket, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse
-from fastapi.security import OAuth2PasswordBearer
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from typing import Optional, List
@@ -51,16 +50,32 @@ connections: List[WebSocket] = []
 messages_list: dict[int, MsgPayload] = {}
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> Optional[User]:
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    print("Get current user executed")
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         username: str = payload.get("sub")
         if username is None:
-            return None
-        return User(**fake_users_db[username])
+            raise credentials_exception
     except JWTError:
-        return None
+        raise credentials_exception
+    user = await get_user(db, username)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return user
     
+@app.get("/protected")
+async def protected_route(current_user: User = Depends(get_current_user)):
+    print("Protected route executed")
+    return {"message": f"Hello, {current_user.username}!"}
+
 @app.get("/login")
 async def login(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
@@ -70,7 +85,9 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     if not await db.verify_password(form_data.username, form_data.password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     # Generate a JWT token
-    token = encode({"sub": form_data.username}, "secret_key", algorithm="HS256")
+    expires_delta = timedelta(minutes=30)  # 30 minutes
+    expire = datetime.utcnow() + expires_delta
+    token = jwt.encode({"sub": form_data.username, "exp": expire}, SECRET_KEY, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -108,18 +125,20 @@ async def signup(user_create: UserCreate):
 
 
 
-
 @app.exception_handler(401)
 async def unauthorized_exception_handler(request: Request, exc: Exception):
+    logging.error("Unauthorized exception: %s", exc)
     return templates.TemplateResponse("unauthorized.html", {"request": request, "message": "Unauthorized access"})
 @app.get("/")
 async def root(request: Request, user: Optional[User] = Depends(get_current_user)):
+    logging.debug("User object: %s", user)
     if user:
       return templates.TemplateResponse("chat.html", {
         "request": request,
         "active_users": len(connections),
         "user": user
     })
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
 # About page route
@@ -173,8 +192,6 @@ async def websocket_endpoint(
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-def verify_password(plain_password, hashed_password):
-    return plain_password == hashed_password
 
 async def get_user(db, username: str):
        return await db.get_user_by_username(username)
@@ -188,21 +205,20 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
     return encoded_jwt
-
 async def authenticate_user(db, username: str, password: str):
     user = await get_user(db, username)
     if not user:
         return False
-    if not verify_password(password, user[1]):
+    if not verify_password(password, user.hashed_password):
         return False
     return user
 
+
 @app.post("/token", response_model=Token)
 async def login_for_access_token(login_data: LoginData):
-
-    print(f"user logged in: {login_data.username}")
     user = await authenticate_user(db, login_data.username, login_data.password)
     if not user:
+        print("Authentication failed for user:", login_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -210,6 +226,7 @@ async def login_for_access_token(login_data: LoginData):
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["username"]}, expires_delta=access_token_expires
+        data={"sub": user.username}, expires_delta=access_token_expires
     )
+    logging.debug("Access token created: %s", access_token)
     return {"access_token": access_token, "token_type": "bearer"}

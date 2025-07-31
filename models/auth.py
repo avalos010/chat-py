@@ -25,7 +25,7 @@ class UserCreate(BaseModel):
 
 class LoginData(BaseModel):
     username: str
-    password: SecretStr
+    password:str
 
 class MsgPayload(BaseModel):
     message: str
