@@ -1,0 +1,29 @@
+{% extends "base.html" %} {% block title %}Home - chat-py{% endblock %} {% block
+content %}
+<main>
+  <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+    <!-- Hero Section -->
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold text-gray-900 mb-4">Welcome to chat-py</h1>
+      <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+        A modern real-time chat application built with FastAPI, TypeScript, and
+        Tailwind CSS.
+      </p>
+    </div>
+
+    <!-- Content based on authentication status -->
+    <div id="home-content" class="flex items-center justify-center">
+      <div class="text-center">
+        <div
+          class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"
+        ></div>
+        <p class="text-gray-600">Loading...</p>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %} {% block scripts %}
+<script src="{{ url_for('static', path='/js/auth.js') }}"></script>
+<script src="{{ url_for('static', path='/js/nav.js') }}"></script>
+<script src="{{ url_for('static', path='/js/home.js') }}"></script>
+{% endblock %}

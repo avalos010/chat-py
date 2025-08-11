@@ -1,4 +1,4 @@
-{% extends "base.html" %} {% block title %}Login - FastAPI Chat{% endblock %} {%
+{% extends "base.html" %} {% block title %}Login - chat-py{% endblock %} {%
 block content %}
 <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
   <div class="sm:mx-auto sm:w-full sm:max-w-sm">
@@ -67,4 +67,5 @@ block content %}
 </div>
 {% endblock %} {% block scripts %}
 <script src="{{ url_for('static', path='/js/auth.js') }}"></script>
+<script src="{{ url_for('static', path='/js/nav.js') }}"></script>
 {% endblock %}

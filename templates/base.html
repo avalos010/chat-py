@@ -3,13 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{% block title %}FastAPI Chat{% endblock %}</title>
+    <title>{% block title %}chat-py{% endblock %}</title>
     <link
       href="{{ url_for('static', path='/css/styles.css') }}"
       rel="stylesheet"
     />
   </head>
   <body class="h-full">
-    {% block content %}{% endblock %} {% block scripts %}{% endblock %}
+    {% include 'components/nav.html' %} {% block content %}{% endblock %} {%
+    block scripts %}{% endblock %}
+
+    <!-- Navigation JavaScript -->
+    <script
+      type="module"
+      src="{{ url_for('static', path='/js/nav.js') }}"
+    ></script>
   </body>
 </html>

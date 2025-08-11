@@ -1,6 +1,6 @@
-# FastAPI Template
+# chat-py
 
-This sample repo contains the recommended structure for a Python FastAPI project. In this sample, we use `fastapi` to build a web application and the `pytest` to run tests.
+A modern chat application built with FastAPI, TypeScript, and Tailwind CSS. This project features real-time messaging, user authentication, and a responsive web interface.
 
 For a more in-depth tutorial, see our [Fast API tutorial](https://code.visualstudio.com/docs/python/tutorial-fastapi).
 
@@ -15,7 +15,7 @@ To successfully run this example, we recommend the following VS Code extensions:
 - [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 - [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
 - [Python Debugger](https://marketplace.visualstudio.com/items?itemName=ms-python.debugpy)
-- [Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance) 
+- [Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance)
 
 In addition to these extension there a few settings that are also useful to enable. You can enable to following settings by opening the Settings editor (`Ctrl+,`) and searching for the following settings:
 
@@ -24,10 +24,11 @@ In addition to these extension there a few settings that are also useful to enab
 - Python > Analysis > Inlay Hints: **Variable Types** : `enable`
 
 ## Running the sample
+
 - Open the template folder in VS Code (**File** > **Open Folder...**)
 - Open the Command Palette in VS Code (**View > Command Palette...**) and run the **Dev Container: Reopen in Container** command.
 - Run the app using the Run and Debug view or by pressing `F5`
-- `Ctrl + click` on the URL that shows up on the terminal to open the running application 
+- `Ctrl + click` on the URL that shows up on the terminal to open the running application
 - Test the API functionality by navigating to `/docs` URL to view the Swagger UI
 - Configure your Python test in the Test Panel or by triggering the **Python: Configure Tests** command from the Command Palette
 - Run tests in the Test Panel or by clicking the Play Button next to the individual tests in the `test_main.py` file

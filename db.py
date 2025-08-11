@@ -16,16 +16,17 @@ class Database:
 
     async def create_tables(self):
         print("Creating tables...")
-        async with aiosqlite.connect(self.db_name) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY,
-                    username TEXT NOT NULL,
-                    email TEXT NOT NULL,
-                    password TEXT NOT NULL
-                )
-            """)
-            await self.commit()
+        if not self.conn:
+            await self.connect()
+        await self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                email TEXT NOT NULL,
+                password TEXT NOT NULL
+            )
+        """)
+        await self.commit()
 
     async def connect(self):
         
@@ -51,28 +52,53 @@ class Database:
         return await cursor.fetchone()
     
     async def get_user_by_username(self, username: str):
-        async with aiosqlite.connect(self.db_name) as db:
-            async with db.execute("SELECT * FROM users WHERE username = ?", (username,)) as cursor:
-                user_tuple = await cursor.fetchone()
-            if user_tuple:
-                user_dict = dict(zip(["id", "username", "email", "hashed_password"], user_tuple))
-                return UserInDB(**user_dict)
-            else:
-                return None
+        if not self.conn:
+            return None
+        async with self.conn.execute("SELECT * FROM users WHERE username = ?", (username,)) as cursor:
+            user_tuple = await cursor.fetchone()
+        if user_tuple:
+            user_dict = dict(zip(["id", "username", "email", "password"], user_tuple))
+            return UserInDB(**user_dict)
+        else:
+            return None
 
     async def get_user_by_email(self, email: str):
-        async with aiosqlite.connect(self.db_name) as db:
-            async with db.execute("SELECT * FROM users WHERE email = ?", (email,)) as cursor:
-                user = await cursor.fetchone()
-                if user:
-                    return user
-                else:
-                    return None
+        if not self.conn:
+            return None
+        async with self.conn.execute("SELECT * FROM users WHERE email = ?", (email,)) as cursor:
+            user_tuple = await cursor.fetchone()
+        if user_tuple:
+            user_dict = dict(zip(["id", "username", "email", "password"], user_tuple))
+            return UserInDB(**user_dict)
+        else:
+            return None
 
+
+    async def get_user_by_id(self, user_id: int):
+        if not self.conn:
+            return None
+        async with self.conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
+            user_tuple = await cursor.fetchone()
+        if user_tuple:
+            user_dict = dict(zip(["id", "username", "email", "password"], user_tuple))
+            return UserInDB(**user_dict)
+        else:
+            return None
+
+    async def get_all_users(self):
+        if not self.conn:
+            return []
+        async with self.conn.execute("SELECT * FROM users") as cursor:
+            user_tuples = await cursor.fetchall()
+        users = []
+        for user_tuple in user_tuples:
+            user_dict = dict(zip(["id", "username", "email", "password"], user_tuple))
+            users.append(UserInDB(**user_dict))
+        return users
 
     async def verify_password(self, username: str, password: str):
-        user = await self.get_user(username)
+        user = await self.get_user_by_username(username)
         if not user:
             return False
         # Assuming you have a password hash stored in the database
-        return verify_password(password, user["password"])
+        return verify_password(password, user.password)

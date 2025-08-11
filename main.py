@@ -1,4 +1,5 @@
 from codecs import encode
+from typing_extensions import Annotated
 from fastapi import Body, FastAPI, WebSocket, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -29,7 +30,7 @@ logger.setLevel(logging.ERROR)
 # Fake database for development
 fake_users_db = {}
 
-app = FastAPI()
+app = FastAPI(debug=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 db = Database()
@@ -52,8 +53,9 @@ messages_list: dict[int, MsgPayload] = {}
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)):
     print("Get current user executed")
+    print("Request headers:", request.headers)
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -61,20 +63,50 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        print("Decoded payload:", payload)
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        print("Error:", e)
         raise credentials_exception
     user = await get_user(db, username)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
     return user
+
+async def get_current_user_from_request(request: Request):
+    """Get current user from request state (set by middleware)"""
+    user = getattr(request.state, 'user', None)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
     
-@app.get("/protected")
-async def protected_route(current_user: User = Depends(get_current_user)):
-    print("Protected route executed")
-    return {"message": f"Hello, {current_user.username}!"}
+@app.get("/chat")
+async def chat_route(request: Request):
+    """Serve the chat page template - authentication handled client-side"""
+    return templates.TemplateResponse("chat.html", {
+        "request": request,
+        "active_users": len(connections),
+        "user": None  # Will be populated by client-side auth
+    })
+
+@app.get("/dashboard")
+async def dashboard_route(request: Request):
+    """Serve the dashboard page template - authentication handled client-side"""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
+@app.get("/api/dashboard")
+async def dashboard_api_route(request: Request, current_user: User = Depends(get_current_user_from_request)):
+    """API endpoint for dashboard data - requires authentication"""
+    print("Dashboard API route executed")
+    return {"message": f"Hello, {current_user.username}!", "username": current_user.username}
+
+
 
 @app.get("/login")
 async def login(request: Request):
@@ -125,20 +157,22 @@ async def signup(user_create: UserCreate):
 
 
 
-@app.exception_handler(401)
-async def unauthorized_exception_handler(request: Request, exc: Exception):
-    logging.error("Unauthorized exception: %s", exc)
-    return templates.TemplateResponse("unauthorized.html", {"request": request, "message": "Unauthorized access"})
+# @app.exception_handler(401)
+# async def unauthorized_exception_handler(request: Request, exc: Exception):
+#     logging.error("Unauthorized exception: %s", exc)
+#     return templates.TemplateResponse("unauthorized.html", {"request": request, "message": "Unauthorized access"})
 @app.get("/")
-async def root(request: Request, user: Optional[User] = Depends(get_current_user)):
-    logging.debug("User object: %s", user)
+async def root(request: Request):
+    """Serve the home page - authentication handled client-side"""
+    return templates.TemplateResponse("home.html", {"request": request})
+
+@app.get("/check-auth")
+async def check_auth(request: Request):
+    """Check if user is authenticated and return user info"""
+    user = getattr(request.state, 'user', None)
     if user:
-      return templates.TemplateResponse("chat.html", {
-        "request": request,
-        "active_users": len(connections),
-        "user": user
-    })
-    return templates.TemplateResponse("login.html", {"request": request})
+        return {"authenticated": True, "username": user.username}
+    return {"authenticated": False}
 
 
 # About page route
@@ -164,28 +198,41 @@ def message_items() -> dict[str, dict[int, MsgPayload]]:
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(
-    websocket: WebSocket,
-    token: str = Depends(oauth2_scheme)
-):
+async def websocket_endpoint(websocket: WebSocket):
     try:
-        user = await get_current_user(token)
-        if not user:
+        # Get token from query parameters or headers
+        token = websocket.query_params.get("token") or websocket.headers.get("authorization", "").replace("Bearer ", "")
+        
+        if not token:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
             
-        await websocket.accept()
-        connections.append(websocket)
         try:
-            while True:
-                data = await websocket.receive_text()
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                message = f"[{timestamp}] {user.username}: {data}"
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            username = payload.get("sub")
+            if not username:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
                 
-                for connection in connections:
-                    await connection.send_text(message)
-        except:
-            connections.remove(websocket)
+            user = await get_user(db, username)
+            if not user:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+                
+            await websocket.accept()
+            connections.append(websocket)
+            try:
+                while True:
+                    data = await websocket.receive_text()
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    message = f"[{timestamp}] {user.username}: {data}"
+                    
+                    for connection in connections:
+                        await connection.send_text(message)
+            except:
+                connections.remove(websocket)
+        except JWTError:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
     except:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
 
@@ -194,7 +241,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
 async def get_user(db, username: str):
-       return await db.get_user_by_username(username)
+    return await db.get_user_by_username(username)
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
@@ -209,7 +256,7 @@ async def authenticate_user(db, username: str, password: str):
     user = await get_user(db, username)
     if not user:
         return False
-    if not verify_password(password, user.hashed_password):
+    if not verify_password(password, user.password):
         return False
     return user
 
@@ -229,4 +276,50 @@ async def login_for_access_token(login_data: LoginData):
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     logging.debug("Access token created: %s", access_token)
-    return {"access_token": access_token, "token_type": "bearer"}
+    print("Access token created:", access_token)
+    
+    # Return token with redirect information
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "redirect_url": "/dashboard"
+    }
+
+
+@app.middleware("http")
+async def verify_token(request: Request, call_next):
+    print("Middleware executed")
+    print(f"Request path: {request.url.path}")
+    print(f"Authorization header: {request.headers.get('Authorization')}")
+    try:
+        token = request.headers.get("Authorization")
+        if not token:
+            # Set a default user for unauthenticated requests
+            request.state.user = None
+            print("No Authorization header found")
+            return await call_next(request)
+        
+        token = token.replace("Bearer ", "")  # Remove the Bearer prefix
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            username = payload.get("sub")
+            if username:
+                # Get user from database and set it on request
+                user = await get_user(db, username)
+                if user:
+                    request.state.user = user
+                    print(f"User authenticated: {user.username}")
+                else:
+                    request.state.user = None
+                    print("User not found in database")
+            else:
+                request.state.user = None
+                print("No username in token payload")
+        except JWTError as e:
+            print("Error decoding token:", e)
+            request.state.user = None
+    except Exception as e:
+        print("Error:", e)
+        request.state.user = None
+    
+    return await call_next(request)

@@ -15,7 +15,7 @@ class User(BaseModel):
     disabled: Optional[bool] = False
 
 class UserInDB(User):
-    hashed_password: str
+    password: str
 
 class UserCreate(BaseModel):
     username: str

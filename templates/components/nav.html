@@ -1,0 +1,45 @@
+<nav class="bg-gray-800">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="flex h-16 items-center justify-between">
+      <div class="flex items-center space-x-8">
+        <div class="text-white text-xl font-bold">chat-py</div>
+        <div class="hidden md:flex space-x-4">
+          <a
+            href="/"
+            class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+            >Home</a
+          >
+          <a
+            id="nav-dashboard"
+            href="/dashboard"
+            class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium hidden"
+            >Dashboard</a
+          >
+          <a
+            id="nav-chat"
+            href="/chat"
+            class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium hidden"
+            >Chat</a
+          >
+          <a
+            href="/about"
+            class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+            >About</a
+          >
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <div id="auth-status" class="text-gray-300">
+          <!-- Auth status will be populated by JavaScript -->
+        </div>
+        <div id="auth-buttons" class="hidden">
+          <!-- Auth buttons will be populated by JavaScript -->
+        </div>
+        <div id="nav-signout" class="hidden">
+          <!-- Signout button for authenticated users -->
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>
