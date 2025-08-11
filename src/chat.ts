@@ -1,3 +1,5 @@
+import { protectRoute } from "./auth.js";
+
 interface ChatMessage {
   text: string;
   timestamp: string;
@@ -5,13 +7,12 @@ interface ChatMessage {
 }
 
 class ChatApp {
-  private ws: WebSocket;
+  private ws: WebSocket | null = null;
   private messageInput: HTMLInputElement | null;
   private sendButton: HTMLButtonElement | null;
   private messagesContainer: HTMLDivElement | null;
 
   constructor() {
-    this.ws = new WebSocket("ws://localhost:8000/ws");
     this.messageInput = document.getElementById(
       "messageText"
     ) as HTMLInputElement;
@@ -26,11 +27,28 @@ class ChatApp {
       throw new Error("Required DOM elements not found");
     }
 
+    this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
+    // Check authentication first
+    await protectRoute();
+
+    // Initialize WebSocket with authentication
     this.initializeWebSocket();
     this.addEventListeners();
   }
 
   private initializeWebSocket(): void {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.error("No token found for WebSocket connection");
+      return;
+    }
+
+    // Connect to WebSocket with authentication token
+    this.ws = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
+
     this.ws.onmessage = (event: MessageEvent) => {
       if (!this.messagesContainer) return;
 
@@ -41,10 +59,18 @@ class ChatApp {
       this.messagesContainer.appendChild(message);
       this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
     };
+
+    this.ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    this.ws.onclose = () => {
+      console.log("WebSocket connection closed");
+    };
   }
 
   private sendMessage(): void {
-    if (!this.messageInput) return;
+    if (!this.messageInput || !this.ws) return;
 
     const message = this.messageInput.value.trim();
     if (message) {

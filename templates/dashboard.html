@@ -27,8 +27,31 @@ block content %}
     </div>
   </div>
 </main>
+
+<!-- Hidden login redirect container -->
+<div id="login-redirect" class="hidden">
+  <div
+    class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50"
+  >
+    <div class="bg-white p-6 rounded-lg shadow-xl">
+      <div
+        class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"
+      ></div>
+      <p class="text-gray-600">Authenticating...</p>
+    </div>
+  </div>
+</div>
 {% endblock %} {% block scripts %}
-<script src="{{ url_for('static', path='/js/auth.js') }}"></script>
-<script src="{{ url_for('static', path='/js/nav.js') }}"></script>
-<script src="{{ url_for('static', path='/js/dashboard.js') }}"></script>
+<script
+  type="module"
+  src="{{ url_for('static', path='/js/auth.js') }}?v={{ range(1, 1000) | random }}"
+></script>
+<script
+  type="module"
+  src="{{ url_for('static', path='/js/nav.js') }}?v={{ range(1, 1000) | random }}"
+></script>
+<script
+  type="module"
+  src="{{ url_for('static', path='/js/dashboard.js') }}?v={{ range(1, 1000) | random }}"
+></script>
 {% endblock %}

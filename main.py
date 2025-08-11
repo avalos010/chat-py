@@ -88,17 +88,67 @@ async def get_current_user_from_request(request: Request):
     
 @app.get("/chat")
 async def chat_route(request: Request):
-    """Serve the chat page template - authentication handled client-side"""
-    return templates.TemplateResponse("chat.html", {
-        "request": request,
-        "active_users": len(connections),
-        "user": None  # Will be populated by client-side auth
-    })
+    """Serve the chat page template - requires authentication"""
+    # Check for token in Authorization header
+    token = request.headers.get("Authorization")
+    if not token or not token.startswith("Bearer "):
+        return RedirectResponse(url="/login", status_code=302)
+    
+    try:
+        # Verify the token
+        token_value = token.replace("Bearer ", "")
+        payload = jwt.decode(token_value, SECRET_KEY, algorithms=["HS256"])
+        username = payload.get("sub")
+        if not username:
+            return RedirectResponse(url="/login", status_code=302)
+        
+        # Check if user exists in database
+        user = await get_user(db, username)
+        if not user:
+            return RedirectResponse(url="/login", status_code=302)
+            
+        return templates.TemplateResponse("chat.html", {
+            "request": request,
+            "active_users": len(connections),
+            "user": user
+        })
+    except JWTError:
+        return RedirectResponse(url="/login", status_code=302)
 
 @app.get("/dashboard")
 async def dashboard_route(request: Request):
-    """Serve the dashboard page template - authentication handled client-side"""
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    """Serve the dashboard page template - requires authentication"""
+    # First try to get user from middleware (for API requests with headers)
+    user = getattr(request.state, 'user', None)
+    
+    # If no user from middleware, check for token in query params (for browser navigation)
+    if not user:
+        token = request.query_params.get("token")
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                username = payload.get("sub")
+                if username:
+                    user = await get_user(db, username)
+            except JWTError:
+                pass
+    
+    # If still no user, check for token in cookies as fallback
+    if not user:
+        token = request.cookies.get("auth_token")
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                username = payload.get("sub")
+                if username:
+                    user = await get_user(db, username)
+            except JWTError:
+                pass
+    
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    return templates.TemplateResponse("dashboard.html", {"request": request, "user": user})
 
 @app.get("/api/dashboard")
 async def dashboard_api_route(request: Request, current_user: User = Depends(get_current_user_from_request)):
@@ -177,8 +227,9 @@ async def check_auth(request: Request):
 
 # About page route
 @app.get("/about")
-def about() -> dict[str, str]:
-    return {"message": "This is the about page."}
+async def about(request: Request):
+    """Serve the about page template"""
+    return templates.TemplateResponse("about.html", {"request": request})
 
 
 # Route to add a message

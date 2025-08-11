@@ -10,7 +10,12 @@ block content %}
   </div>
 
   <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-    <form class="space-y-6" id="loginForm">
+    <form
+      class="space-y-6"
+      id="loginForm"
+      method="POST"
+      action="javascript:void(0);"
+    >
       <div>
         <label
           for="username"
@@ -66,6 +71,12 @@ block content %}
   </div>
 </div>
 {% endblock %} {% block scripts %}
-<script src="{{ url_for('static', path='/js/auth.js') }}"></script>
-<script src="{{ url_for('static', path='/js/nav.js') }}"></script>
+<script
+  type="module"
+  src="{{ url_for('static', path='/js/auth.js') }}?v={{ range(1, 1000) | random }}"
+></script>
+<script
+  type="module"
+  src="{{ url_for('static', path='/js/nav.js') }}?v={{ range(1, 1000) | random }}"
+></script>
 {% endblock %}

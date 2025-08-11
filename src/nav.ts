@@ -19,8 +19,27 @@ class NavigationManager {
   }
 
   private initialize(): void {
-    this.updateNavigation();
+    // Hide protected routes by default
+    this.hideProtectedRoutes();
+
+    // Small delay to ensure DOM is fully ready, then update navigation
+    setTimeout(() => {
+      this.updateNavigation();
+    }, 100);
+
     this.setupEventListeners();
+  }
+
+  private hideProtectedRoutes(): void {
+    // Ensure protected routes are hidden by default using both class and style
+    if (this.navDashboardElement) {
+      this.navDashboardElement.classList.add("hidden");
+      this.navDashboardElement.style.display = "none";
+    }
+    if (this.navChatElement) {
+      this.navChatElement.classList.add("hidden");
+      this.navChatElement.style.display = "none";
+    }
   }
 
   private setupEventListeners(): void {
@@ -76,9 +95,11 @@ class NavigationManager {
     // Show protected navigation links
     if (this.navDashboardElement) {
       this.navDashboardElement.classList.remove("hidden");
+      this.navDashboardElement.style.display = "";
     }
     if (this.navChatElement) {
       this.navChatElement.classList.remove("hidden");
+      this.navChatElement.style.display = "";
     }
 
     // Hide the nav-signout div since we only need one signout button
@@ -112,12 +133,14 @@ class NavigationManager {
       this.authButtonsElement.classList.remove("hidden");
     }
 
-    // Hide protected navigation links
+    // Explicitly hide protected navigation links for unauthenticated users
     if (this.navDashboardElement) {
       this.navDashboardElement.classList.add("hidden");
+      this.navDashboardElement.style.display = "none";
     }
     if (this.navChatElement) {
       this.navChatElement.classList.add("hidden");
+      this.navChatElement.style.display = "none";
     }
   }
 
@@ -139,7 +162,12 @@ class NavigationManager {
 
 // Initialize navigation when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
-  new NavigationManager();
+  const navManager = new NavigationManager();
+
+  // Force refresh navigation state after a short delay to handle any edge cases
+  setTimeout(() => {
+    navManager.refresh();
+  }, 200);
 });
 
 // Export for use in other modules

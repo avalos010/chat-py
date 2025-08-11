@@ -1,3 +1,5 @@
+import { protectRoute } from "./auth.js";
+
 interface Contact {
   id: string;
   username: string;
@@ -33,30 +35,7 @@ class DashboardManager {
   }
 
   private async checkAuthentication(): Promise<void> {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-
-    try {
-      const response = await fetch("/check-auth", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        localStorage.removeItem("token");
-        window.location.href = "/login";
-        return;
-      }
-    } catch (error) {
-      console.error("Auth check failed:", error);
-      localStorage.removeItem("token");
-      window.location.href = "/login";
-      return;
-    }
+    await protectRoute();
   }
 
   private async loadDashboard(): Promise<void> {
