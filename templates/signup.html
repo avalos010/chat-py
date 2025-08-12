@@ -1,107 +1,149 @@
 {% extends "base.html" %} {% block title %}Sign Up - chat-py{% endblock %} {%
 block content %}
-<div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
-  <div class="sm:mx-auto sm:w-full sm:max-w-sm">
-    <h2
-      class="mt-10 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900"
-    >
-      Create your account
-    </h2>
+<div
+  class="min-h-screen flex bg-gradient-to-br from-space-cadet to-raisin-black"
+>
+  <!-- Left side - Hero section -->
+  <div class="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+    <div
+      class="absolute inset-0 bg-gradient-to-br from-penn-red to-space-cadet opacity-90"
+    ></div>
+    <div class="relative z-10 flex flex-col justify-center px-12 text-white">
+      <div class="max-w-lg">
+        <h1 class="text-4xl font-bold mb-6">Join the chat-py community</h1>
+        <p class="text-xl text-sunset mb-8">
+          Start your journey with us today. Create meaningful connections and
+          collaborate with people around the world.
+        </p>
+        <div class="space-y-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-2 h-2 bg-sunset rounded-full"></div>
+            <span class="text-floral-white"
+              >Create unlimited conversations</span
+            >
+          </div>
+          <div class="flex items-center space-x-3">
+            <div class="w-2 h-2 bg-sunset rounded-full"></div>
+            <span class="text-floral-white">Connect with global community</span>
+          </div>
+          <div class="flex items-center space-x-3">
+            <div class="w-2 h-2 bg-sunset rounded-full"></div>
+            <span class="text-floral-white">Free forever</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-    <form
-      class="space-y-6"
-      id="signupForm"
-      method="POST"
-      action="javascript:void(0);"
-    >
-      <div>
-        <label
-          for="username"
-          class="block text-sm font-medium leading-6 text-gray-900"
-          >Username</label
-        >
-        <div class="mt-2">
-          <input
-            id="username"
-            name="username"
-            type="text"
-            required
-            class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-          />
-        </div>
+  <!-- Right side - Signup form -->
+  <div
+    class="flex-1 flex flex-col justify-center px-6 py-12 lg:px-12 bg-floral-white"
+  >
+    <div class="sm:mx-auto sm:w-full sm:max-w-md">
+      <div class="text-center mb-8">
+        <h2 class="text-3xl font-bold tracking-tight text-raisin-black">
+          Create your account
+        </h2>
+        <p class="text-sm text-space-cadet">
+          Join thousands of users already chatting with chat-py.
+        </p>
       </div>
 
-      <div>
-        <label
-          for="email"
-          class="block text-sm font-medium leading-6 text-gray-900"
-          >Email address</label
-        >
-        <div class="mt-2">
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label
-          for="password"
-          class="block text-sm font-medium leading-6 text-gray-900"
-          >Password</label
-        >
-        <div class="mt-2">
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label
-          for="password2"
-          class="block text-sm font-medium leading-6 text-gray-900"
-          >Confirm Password</label
-        >
-        <div class="mt-2">
-          <input
-            id="password2"
-            name="password2"
-            type="password"
-            required
-            class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-          />
-        </div>
-      </div>
-
-      <div>
-        <button
-          type="submit"
-          class="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
-          Sign up
-        </button>
-      </div>
-    </form>
-
-    <p class="mt-10 text-center text-sm text-gray-500">
-      Already have an account?
-      <a
-        href="/login"
-        class="font-semibold leading-6 text-indigo-600 hover:text-indigo-500"
-        >Sign in</a
+      <div
+        class="bg-white py-8 px-6 shadow-xl rounded-2xl border border-gray-100"
       >
-    </p>
+        <form
+          class="space-y-5"
+          id="signupForm"
+          method="POST"
+          action="javascript:void(0);"
+        >
+          <div>
+            <label
+              for="username"
+              class="block text-sm font-medium leading-6 mb-2 text-raisin-black"
+              >Username</label
+            >
+            <input
+              id="username"
+              name="username"
+              type="text"
+              required
+              placeholder="Choose a username"
+              class="block w-full rounded-xl border-0 py-3 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-penn-red transition-all duration-200"
+            />
+          </div>
+
+          <div>
+            <label
+              for="email"
+              class="block text-sm font-medium leading-6 mb-2 text-raisin-black"
+              >Email address</label
+            >
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              placeholder="Enter your email"
+              class="block w-full rounded-xl border-0 py-3 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-penn-red transition-all duration-200"
+            />
+          </div>
+
+          <div>
+            <label
+              for="password"
+              class="block text-sm font-medium leading-6 mb-2 text-raisin-black"
+              >Password</label
+            >
+            <input
+              id="password"
+              name="password"
+              type="password"
+              required
+              placeholder="Create a password"
+              class="block w-full rounded-xl border-0 py-3 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-penn-red transition-all duration-200"
+            />
+          </div>
+
+          <div>
+            <label
+              for="password2"
+              class="block text-sm font-medium leading-6 mb-2 text-raisin-black"
+              >Confirm Password</label
+            >
+            <input
+              id="password2"
+              name="password2"
+              type="password"
+              required
+              placeholder="Confirm your password"
+              class="block w-full rounded-xl border-0 py-3 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-penn-red transition-all duration-200"
+            />
+          </div>
+
+          <div class="pt-2">
+            <button
+              type="submit"
+              class="flex w-full justify-center rounded-xl px-3 py-3 text-sm font-semibold leading-6 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] bg-gradient-to-r from-penn-red to-space-cadet"
+            >
+              Create Account
+            </button>
+          </div>
+        </form>
+
+        <div class="mt-6 text-center">
+          <p class="text-sm text-space-cadet">
+            Already have an account?
+            <a
+              href="/login"
+              class="font-semibold hover:underline transition-colors duration-200 text-penn-red"
+              >Sign in instead</a
+            >
+          </p>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %} {% block scripts %}

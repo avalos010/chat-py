@@ -28,7 +28,7 @@
     <!-- Navigation JavaScript -->
     <script
       type="module"
-      src="{{ url_for('static', path='/js/nav.js') }}"
+      src="{{ url_for('static', path='/js/nav.js') }}?v={{ range(1, 1000) | random }}"
     ></script>
   </body>
 </html>

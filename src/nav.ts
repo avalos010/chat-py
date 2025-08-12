@@ -73,12 +73,12 @@ class NavigationManager {
 
     if (this.authButtonsElement) {
       this.authButtonsElement.innerHTML = `
-        <a href="/dashboard" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+        <a href="/dashboard" class="bg-space-cadet hover:bg-space-cadet/90 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
           Dashboard
         </a>
         <button 
           id="authLogoutBtn" 
-          class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors ml-2"
+          class="bg-penn-red hover:bg-penn-red/90 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors ml-2"
         >
           Sign Out
         </button>
@@ -119,13 +119,13 @@ class NavigationManager {
       this.authButtonsElement.innerHTML = `
         <a 
           href="/login" 
-          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          class="bg-space-cadet hover:bg-space-cadet/90 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
         >
           Sign In
         </a>
         <a 
           href="/signup" 
-          class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors ml-2"
+          class="bg-sunset hover:bg-sunset/90 text-raisin-black px-4 py-2 rounded-md text-sm font-medium transition-colors ml-2"
         >
           Sign Up
         </a>
