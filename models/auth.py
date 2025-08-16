@@ -15,6 +15,7 @@ class User(BaseModel):
     disabled: Optional[bool] = False
 
 class UserInDB(User):
+    id: int
     password: str
 
 class UserCreate(BaseModel):
@@ -25,7 +26,10 @@ class UserCreate(BaseModel):
 
 class LoginData(BaseModel):
     username: str
-    password:str
+    password: str
+
+class FriendRequestData(BaseModel):
+    friend_id: int
 
 class MsgPayload(BaseModel):
     message: str

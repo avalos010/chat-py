@@ -10,7 +10,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError
 import jwt
 from models.auth import MsgPayload, MessageResponse
-from models.auth import LoginData, User, UserCreate, Token, UserInDB
+from models.auth import LoginData, User, UserCreate, Token, UserInDB, FriendRequestData
 from utils.security import (
     verify_token,
     oauth2_scheme,
@@ -89,31 +89,41 @@ async def get_current_user_from_request(request: Request):
 @app.get("/chat")
 async def chat_route(request: Request):
     """Serve the chat page template - requires authentication"""
-    # Check for token in Authorization header
-    token = request.headers.get("Authorization")
-    if not token or not token.startswith("Bearer "):
+    # First try to get user from middleware (for API requests with headers)
+    user = getattr(request.state, 'user', None)
+    
+    # If no user from middleware, check for token in query params (for browser navigation)
+    if not user:
+        token = request.query_params.get("token")
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                username = payload.get("sub")
+                if username:
+                    user = await get_user(db, username)
+            except JWTError:
+                pass
+    
+    # If still no user, check for token in cookies as fallback
+    if not user:
+        token = request.cookies.get("auth_token")
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                username = payload.get("sub")
+                if username:
+                    user = await get_user(db, username)
+            except JWTError:
+                pass
+    
+    if not user:
         return RedirectResponse(url="/login", status_code=302)
     
-    try:
-        # Verify the token
-        token_value = token.replace("Bearer ", "")
-        payload = jwt.decode(token_value, SECRET_KEY, algorithms=["HS256"])
-        username = payload.get("sub")
-        if not username:
-            return RedirectResponse(url="/login", status_code=302)
-        
-        # Check if user exists in database
-        user = await get_user(db, username)
-        if not user:
-            return RedirectResponse(url="/login", status_code=302)
-            
-        return templates.TemplateResponse("chat.html", {
-            "request": request,
-            "active_users": len(connections),
-            "user": user
-        })
-    except JWTError:
-        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse("chat.html", {
+        "request": request,
+        "active_users": len(connections),
+        "user": user
+    })
 
 @app.get("/dashboard")
 async def dashboard_route(request: Request):
@@ -230,6 +240,110 @@ async def check_auth(request: Request):
 async def about(request: Request):
     """Serve the about page template"""
     return templates.TemplateResponse("about.html", {"request": request})
+
+@app.get("/friends")
+async def friends_page(request: Request):
+    """Serve the friends page template"""
+    return templates.TemplateResponse("friends.html", {"request": request})
+
+# Friend-related endpoints
+@app.get("/api/friends")
+async def get_friends(request: Request):
+    """Get current user's friends list"""
+    user = await get_current_user_from_request(request)
+    friends = await db.get_friends_list(user.id)
+    return {"friends": friends}
+
+@app.get("/api/friend-requests")
+async def get_friend_requests(request: Request):
+    """Get pending friend requests for current user"""
+    user = await get_current_user_from_request(request)
+    requests = await db.get_friend_requests(user.id)
+    return {"requests": requests}
+
+@app.get("/api/sent-friend-requests")
+async def get_sent_friend_requests(request: Request):
+    """Get pending friend requests sent by current user"""
+    user = await get_current_user_from_request(request)
+    requests = await db.get_sent_friend_requests(user.id)
+    return {"requests": requests}
+
+@app.delete("/api/friend-request/cancel/{friend_id}")
+async def cancel_friend_request(request: Request, friend_id: int):
+    """Cancel a sent friend request"""
+    user = await get_current_user_from_request(request)
+    success = await db.cancel_friend_request(user.id, friend_id)
+    if success:
+        return {"message": "Friend request canceled successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to cancel friend request")
+
+@app.post("/api/friend-request/send")
+async def send_friend_request(request: Request, friend_data: FriendRequestData):
+    """Send a friend request to another user"""
+    user = await get_current_user_from_request(request)
+    
+    # Check if user is trying to add themselves
+    if user.id == friend_data.friend_id:
+        raise HTTPException(status_code=400, detail="Cannot send friend request to yourself")
+    
+    # Check if friend request already exists
+    existing_requests = await db.get_friend_requests(friend_data.friend_id)
+    for req in existing_requests:
+        if req["user_id"] == user.id:
+            raise HTTPException(status_code=400, detail="Friend request already sent")
+    
+    # Check if already friends
+    friends = await db.get_friends_list(user.id)
+    for friend in friends:
+        if friend["friend_id"] == friend_data.friend_id:
+            raise HTTPException(status_code=400, detail="Already friends with this user")
+    
+    success = await db.send_friend_request(user.id, friend_data.friend_id)
+    if success:
+        return {"message": "Friend request sent successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to send friend request")
+
+@app.post("/api/friend-request/accept")
+async def accept_friend_request(request: Request, friend_data: FriendRequestData):
+    """Accept a friend request"""
+    user = await get_current_user_from_request(request)
+    success = await db.accept_friend_request(user.id, friend_data.friend_id)
+    if success:
+        return {"message": "Friend request accepted"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to accept friend request")
+
+@app.post("/api/friend-request/reject")
+async def reject_friend_request(request: Request, friend_data: FriendRequestData):
+    """Reject a friend request"""
+    user = await get_current_user_from_request(request)
+    success = await db.reject_friend_request(user.id, friend_data.friend_id)
+    if success:
+        return {"message": "Friend request rejected"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to reject friend request")
+
+@app.delete("/api/friends/{friend_id}")
+async def remove_friend(request: Request, friend_id: int):
+    """Remove a friend"""
+    user = await get_current_user_from_request(request)
+    success = await db.remove_friend(user.id, friend_id)
+    if success:
+        return {"message": "Friend removed successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to remove friend")
+
+@app.get("/api/users/search")
+async def search_users(request: Request, q: str = ""):
+    """Search for users by username"""
+    user = await get_current_user_from_request(request)
+    if len(q) < 2:
+        return {"users": []}
+    
+    users = await db.search_users(q, user.id)
+    return {"users": users}
 
 
 # Route to add a message
