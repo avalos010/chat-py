@@ -57,32 +57,20 @@ class HomePageManager {
       </div>
       
       <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-        <!-- Dashboard Card -->
-        <div class="bg-white rounded-2xl shadow-lg hover:shadow-xl p-8 border border-gray-100 transition-all duration-300 transform hover:-translate-y-2">
-          <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-            </svg>
-          </div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-4 text-center">Analytics Dashboard</h3>
-          <p class="text-gray-600 mb-6 text-center">Monitor your chat activity and user engagement with comprehensive analytics.</p>
-          <a href="/dashboard" class="block w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-center font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg">
-            Go to Dashboard
-          </a>
-        </div>
-
         <!-- Chat Card -->
-        <div class="bg-white rounded-2xl shadow-lg hover:shadow-xl p-8 border border-gray-100 transition-all duration-300 transform hover:-translate-y-2">
-          <div class="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-            </svg>
+        <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+          <div class="text-center">
+            <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+              </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-4 text-center">Real-time Chat</h3>
+            <p class="text-gray-600 mb-6">Connect with friends through instant messaging</p>
+            <a href="/chat" class="block w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-center font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg">
+              Start Chatting
+            </a>
           </div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-4 text-center">Real-time Chat</h3>
-          <p class="text-gray-600 mb-6 text-center">Join the conversation with instant messaging and real-time updates.</p>
-          <a href="/chat" class="block w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl text-center font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg">
-            Join Chat Room
-          </a>
         </div>
 
         <!-- Account Card -->

@@ -138,60 +138,13 @@ async function handlePageLoadAuth(): Promise<void> {
     if (isAuth) {
       console.log("User is authenticated, checking if redirect needed...");
       console.log("Current pathname:", window.location.pathname);
-      console.log(
-        "Should redirect to dashboard?",
-        window.location.pathname === "/" ||
-          window.location.pathname === "/login"
-      );
+      console.log("Should redirect to chat?", window.location.pathname);
 
-      // User is authenticated, redirect to dashboard
-      if (
-        window.location.pathname === "/" ||
-        window.location.pathname === "/login"
-      ) {
-        console.log("Redirecting to dashboard from:", window.location.pathname);
-        const token = localStorage.getItem("token");
-        if (token) {
-          // Pre-verify authentication before redirecting
-          console.log("Pre-verifying authentication...");
-          try {
-            const authResponse = await fetch("/check-auth", {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            });
-
-            if (authResponse.ok) {
-              console.log(
-                "Authentication verified, redirecting to dashboard..."
-              );
-              window.location.href = `/dashboard?token=${encodeURIComponent(
-                token
-              )}`;
-            } else {
-              console.log(
-                "Authentication failed, clearing token and staying on login"
-              );
-              localStorage.removeItem("token");
-              document.cookie =
-                "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-            }
-          } catch (error) {
-            console.error("Auth check failed:", error);
-            localStorage.removeItem("token");
-            document.cookie =
-              "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-          }
-        } else {
-          window.location.href = "/dashboard";
-        }
-      } else {
-        console.log(
-          "No redirect needed, current path:",
-          window.location.pathname
-        );
-        console.log("User is already on a protected page");
-        console.log("Current page:", window.location.href);
+      // User is authenticated, redirect to chat
+      if (window.location.pathname === "/login") {
+        console.log("Redirecting to chat from:", window.location.pathname);
+        window.location.href = "/chat";
+        return;
       }
     } else {
       console.log("Token is invalid, clearing it");
@@ -212,7 +165,7 @@ export {
   protectRoute,
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   console.log("DOM Content Loaded - Auth script is running!");
   console.log("Window location:", window.location.href);
   console.log("Document ready state:", document.readyState);
@@ -224,38 +177,29 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("About to call handlePageLoadAuth...");
   handlePageLoadAuth();
 
-  // Special handling for dashboard page to prevent flash
-  if (window.location.pathname === "/dashboard") {
-    console.log("Dashboard page detected, checking auth immediately...");
+  // Special handling for chat page to prevent flash
+  if (window.location.pathname === "/chat") {
+    console.log("Chat page detected, checking auth immediately...");
     const token = localStorage.getItem("token");
     if (token) {
-      // Show loading state immediately
-      const loginRedirect = document.getElementById("login-redirect");
-      if (loginRedirect) {
-        loginRedirect.classList.remove("hidden");
-      }
-
-      // Verify authentication
-      fetch("/check-auth", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-        .then((response) => {
-          if (response.ok) {
-            console.log("Dashboard auth successful");
-            if (loginRedirect) {
-              loginRedirect.classList.add("hidden");
-            }
-          } else {
-            console.log("Dashboard auth failed, redirecting to login");
-            window.location.href = "/login";
-          }
-        })
-        .catch((error) => {
-          console.error("Dashboard auth check failed:", error);
-          window.location.href = "/login";
+      try {
+        const response = await fetch("/check-auth", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
+
+        if (response.ok) {
+          console.log("Chat auth successful");
+          // User is authenticated, show the page
+        } else {
+          console.log("Chat auth failed, redirecting to login");
+          window.location.href = "/login";
+        }
+      } catch (error) {
+        console.error("Chat auth check failed:", error);
+        window.location.href = "/login";
+      }
     } else {
       console.log("No token found, redirecting to login");
       window.location.href = "/login";
@@ -334,22 +278,14 @@ document.addEventListener("DOMContentLoaded", () => {
         // Also set a cookie for server-side authentication
         document.cookie = `auth_token=${data.access_token}; path=/; max-age=1800; SameSite=Strict`;
 
-        // Redirect to dashboard after successful login
-        console.log("Redirecting to dashboard...");
-        console.log("Current location before redirect:", window.location.href);
-
-        // Force a hard redirect
-        try {
-          window.location.replace("/dashboard");
-        } catch (error) {
-          console.error("Redirect failed:", error);
-          // Fallback: try to navigate
-          window.location.href = "/dashboard";
-        }
+        // Redirect to chat after successful login
+        console.log("Redirecting to chat...");
+        // Use replace to prevent back button from going to login
+        window.location.replace("/chat");
       } else {
-        const errorData = await response.text();
-        console.error("Login failed:", errorData);
-        alert("Login failed. Please check your credentials.");
+        console.log("Login failed, staying on login page");
+        // Redirect to chat page
+        window.location.href = "/chat";
       }
     } catch (error) {
       console.error("Login error:", error);

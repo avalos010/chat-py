@@ -125,49 +125,6 @@ async def chat_route(request: Request):
         "user": user
     })
 
-@app.get("/dashboard")
-async def dashboard_route(request: Request):
-    """Serve the dashboard page template - requires authentication"""
-    # First try to get user from middleware (for API requests with headers)
-    user = getattr(request.state, 'user', None)
-    
-    # If no user from middleware, check for token in query params (for browser navigation)
-    if not user:
-        token = request.query_params.get("token")
-        if token:
-            try:
-                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-                username = payload.get("sub")
-                if username:
-                    user = await get_user(db, username)
-            except JWTError:
-                pass
-    
-    # If still no user, check for token in cookies as fallback
-    if not user:
-        token = request.cookies.get("auth_token")
-        if token:
-            try:
-                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-                username = payload.get("sub")
-                if username:
-                    user = await get_user(db, username)
-            except JWTError:
-                pass
-    
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    
-    return templates.TemplateResponse("dashboard.html", {"request": request, "user": user})
-
-@app.get("/api/dashboard")
-async def dashboard_api_route(request: Request, current_user: User = Depends(get_current_user_from_request)):
-    """API endpoint for dashboard data - requires authentication"""
-    print("Dashboard API route executed")
-    return {"message": f"Hello, {current_user.username}!", "username": current_user.username}
-
-
-
 @app.get("/login")
 async def login(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
@@ -243,8 +200,38 @@ async def about(request: Request):
 
 @app.get("/friends")
 async def friends_page(request: Request):
-    """Serve the friends page template"""
-    return templates.TemplateResponse("friends.html", {"request": request})
+    """Serve the friends page template - requires authentication"""
+    # First try to get user from middleware (for API requests with headers)
+    user = getattr(request.state, 'user', None)
+    
+    # If no user from middleware, check for token in query params (for browser navigation)
+    if not user:
+        token = request.query_params.get("token")
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                username = payload.get("sub")
+                if username:
+                    user = await get_user(db, username)
+            except JWTError:
+                pass
+    
+    # If still no user, check for token in cookies as fallback
+    if not user:
+        token = request.cookies.get("auth_token")
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                username = payload.get("sub")
+                if username:
+                    user = await get_user(db, username)
+            except JWTError:
+                pass
+    
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    return templates.TemplateResponse("friends.html", {"request": request, "user": user})
 
 # Friend-related endpoints
 @app.get("/api/friends")
@@ -447,7 +434,7 @@ async def login_for_access_token(login_data: LoginData):
     return {
         "access_token": access_token, 
         "token_type": "bearer",
-        "redirect_url": "/dashboard"
+        "redirect_url": "/chat"
     }
 
 

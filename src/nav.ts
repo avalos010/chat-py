@@ -6,15 +6,15 @@ class NavigationManager {
   private authStatusElement: HTMLElement | null;
   private authButtonsElement: HTMLElement | null;
   private navSignoutElement: HTMLElement | null;
-  private navDashboardElement: HTMLElement | null;
   private navChatElement: HTMLElement | null;
+  private navFriendsElement: HTMLElement | null;
 
   constructor() {
     this.authStatusElement = document.getElementById("auth-status");
     this.authButtonsElement = document.getElementById("auth-buttons");
     this.navSignoutElement = document.getElementById("nav-signout");
-    this.navDashboardElement = document.getElementById("nav-dashboard");
     this.navChatElement = document.getElementById("nav-chat");
+    this.navFriendsElement = document.getElementById("nav-friends");
     this.initialize();
   }
 
@@ -32,13 +32,13 @@ class NavigationManager {
 
   private hideProtectedRoutes(): void {
     // Ensure protected routes are hidden by default using both class and style
-    if (this.navDashboardElement) {
-      this.navDashboardElement.classList.add("hidden");
-      this.navDashboardElement.style.display = "none";
-    }
     if (this.navChatElement) {
       this.navChatElement.classList.add("hidden");
       this.navChatElement.style.display = "none";
+    }
+    if (this.navFriendsElement) {
+      this.navFriendsElement.classList.add("hidden");
+      this.navFriendsElement.style.display = "none";
     }
   }
 
@@ -73,9 +73,6 @@ class NavigationManager {
 
     if (this.authButtonsElement) {
       this.authButtonsElement.innerHTML = `
-        <a href="/dashboard" class="bg-space-cadet hover:bg-space-cadet/90 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
-          Dashboard
-        </a>
         <button 
           id="authLogoutBtn" 
           class="bg-penn-red hover:bg-penn-red/90 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors ml-2"
@@ -93,13 +90,13 @@ class NavigationManager {
     }
 
     // Show protected navigation links
-    if (this.navDashboardElement) {
-      this.navDashboardElement.classList.remove("hidden");
-      this.navDashboardElement.style.display = "";
-    }
     if (this.navChatElement) {
       this.navChatElement.classList.remove("hidden");
       this.navChatElement.style.display = "";
+    }
+    if (this.navFriendsElement) {
+      this.navFriendsElement.classList.remove("hidden");
+      this.navFriendsElement.style.display = "";
     }
 
     // Hide the nav-signout div since we only need one signout button
@@ -134,13 +131,13 @@ class NavigationManager {
     }
 
     // Explicitly hide protected navigation links for unauthenticated users
-    if (this.navDashboardElement) {
-      this.navDashboardElement.classList.add("hidden");
-      this.navDashboardElement.style.display = "none";
-    }
     if (this.navChatElement) {
       this.navChatElement.classList.add("hidden");
       this.navChatElement.style.display = "none";
+    }
+    if (this.navFriendsElement) {
+      this.navFriendsElement.classList.add("hidden");
+      this.navFriendsElement.style.display = "none";
     }
   }
 
