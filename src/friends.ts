@@ -26,13 +26,18 @@ class FriendsManager {
 
   constructor() {
     this.token = localStorage.getItem("token");
-    this.init();
+    if (!this.token) {
+      window.location.href = "/login";
+      return;
+    }
+
+    this.initialize();
   }
 
-  private init(): void {
-    this.loadFriendRequests();
-    this.loadSentFriendRequests();
-    this.loadFriendsList();
+  private async initialize(): Promise<void> {
+    await this.loadFriendsList();
+    await this.loadAllFriendRequests(); // Load all requests directly
+    // Removed loadSentFriendRequests() since it's now consolidated
     this.setupEventListeners();
   }
 
@@ -337,9 +342,11 @@ class FriendsManager {
     ) as HTMLButtonElement;
 
     if (acceptButton) {
-      acceptButton.addEventListener("click", () =>
-        this.acceptFriendRequest(request.user_id)
-      );
+      acceptButton.addEventListener("click", () => {
+        this.acceptFriendRequest(request.user_id);
+        // Hide the actual friend request element, not the template
+        element.classList.add("hidden");
+      });
     }
 
     if (rejectButton) {
@@ -573,9 +580,26 @@ class FriendsManager {
       });
 
       if (response.ok) {
+        // Remove the friend element from the DOM
+        const friendElement = document.querySelector(
+          `[data-friend-id="${friendId}"]`
+        );
+        if (friendElement) {
+          friendElement.remove();
+        }
+
+        // Also remove from friends list if it exists
+        const friendsList = document.getElementById("friendsList");
+        if (friendsList) {
+          const friendItem = friendsList.querySelector(
+            `[data-friend-id="${friendId}"]`
+          );
+          if (friendItem) {
+            friendItem.remove();
+          }
+        }
+
         alert("Friend removed successfully");
-        // Refresh friends list
-        this.loadFriendsList();
       } else {
         const errorData = await response.json();
         alert(`Failed to remove friend: ${errorData.detail}`);
@@ -584,6 +608,171 @@ class FriendsManager {
       console.error("Error removing friend:", error);
       alert("An error occurred while removing the friend");
     }
+  }
+
+  private async loadAllFriendRequests(): Promise<void> {
+    try {
+      const response = await fetch("/api/all-friend-requests", {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        this.displayAllFriendRequests(data.requests);
+      } else {
+        console.error("Failed to load all friend requests");
+      }
+    } catch (error) {
+      console.error("Error loading all friend requests:", error);
+    }
+  }
+
+  private displayAllFriendRequests(requests: any[]): void {
+    const container = document.getElementById("allFriendRequests");
+    if (!container) return;
+
+    // Clear existing content
+    container.innerHTML = "";
+
+    if (requests.length === 0) {
+      container.innerHTML =
+        '<p class="text-gray-500 text-center py-4">No pending friend requests</p>';
+      return;
+    }
+
+    // Group requests by type
+    const incoming = requests.filter((r) => r.request_type === "incoming");
+    const outgoing = requests.filter((r) => r.request_type === "outgoing");
+
+    // Display incoming requests
+    if (incoming.length > 0) {
+      const incomingSection = document.createElement("div");
+      incomingSection.className = "mb-6";
+      incomingSection.innerHTML = `
+        <h3 class="text-lg font-semibold text-gray-900 mb-3">Incoming Requests</h3>
+        <div class="space-y-3">
+          ${incoming
+            .map(
+              (request) => `
+            <div class="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-semibold">
+                  ${request.username.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p class="font-medium text-gray-900">${request.username}</p>
+                  <p class="text-sm text-gray-500">${request.email}</p>
+                </div>
+              </div>
+              <div class="flex space-x-2">
+                <button class="accept-request bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-user-id="${
+                  request.user_id
+                }">
+                  Accept
+                </button>
+                <button class="reject-request bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-user-id="${
+                  request.user_id
+                }">
+                  Reject
+                </button>
+              </div>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      `;
+      container.appendChild(incomingSection);
+    }
+
+    // Display outgoing requests
+    if (outgoing.length > 0) {
+      const outgoingSection = document.createElement("div");
+      outgoingSection.className = "mb-6";
+      outgoingSection.innerHTML = `
+        <h3 class="text-lg font-semibold text-gray-900 mb-3">Outgoing Requests</h3>
+        <div class="space-y-3">
+          ${outgoing
+            .map(
+              (request) => `
+            <div class="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-semibold">
+                  ${request.username.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p class="font-medium text-gray-900">${request.username}</p>
+                  <p class="text-sm text-gray-500">${request.email}</p>
+                </div>
+              </div>
+              <button class="cancel-request bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-friend-id="${
+                request.friend_id
+              }">
+                Cancel
+              </button>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      `;
+      container.appendChild(outgoingSection);
+    }
+
+    // Add event listeners
+    this.addAllRequestEventListeners();
+  }
+
+  private addAllRequestEventListeners(): void {
+    // Accept buttons
+    document.querySelectorAll(".accept-request").forEach((button) => {
+      button.addEventListener("click", (e) => {
+        const userId = (e.target as HTMLElement).getAttribute("data-user-id");
+        if (userId) {
+          this.acceptFriendRequest(parseInt(userId));
+          // Hide the request element
+          (e.target as HTMLElement)
+            .closest(".bg-white")
+            ?.classList.add("hidden");
+        }
+      });
+    });
+
+    // Reject buttons
+    document.querySelectorAll(".reject-request").forEach((button) => {
+      button.addEventListener("click", (e) => {
+        const userId = (e.target as HTMLElement).getAttribute("data-user-id");
+        if (userId) {
+          this.rejectFriendRequest(parseInt(userId));
+          // Hide the request element
+          (e.target as HTMLElement)
+            .closest(".bg-white")
+            ?.classList.add("hidden");
+        }
+      });
+    });
+
+    // Cancel buttons
+    document.querySelectorAll(".cancel-request").forEach((button) => {
+      button.addEventListener("click", (e) => {
+        const friendId = (e.target as HTMLElement).getAttribute(
+          "data-friend-id"
+        );
+        if (friendId) {
+          this.cancelFriendRequest(parseInt(friendId));
+          // Hide the request element
+          (e.target as HTMLElement)
+            .closest(".bg-white")
+            ?.classList.add("hidden");
+        }
+      });
+    });
+  }
+
+  private async toggleAllRequestsView(): Promise<void> {
+    // This method is no longer needed
   }
 }
 

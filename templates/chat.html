@@ -2,71 +2,36 @@
 content %}
 <main class="min-h-screen bg-gray-50">
   <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      <!-- Friends Sidebar -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Conversations List (Unified - Like Messenger) -->
       <div class="lg:col-span-1">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold text-gray-900">Friends</h2>
+            <h2 class="text-lg font-semibold text-gray-900">Conversations</h2>
             <button
-              id="refreshFriends"
-              class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-              title="Refresh friends list"
+              id="refreshConversationsButton"
+              class="text-sm text-blue-600 hover:text-blue-800 font-medium"
             >
-              <svg
-                class="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                ></path>
-              </svg>
+              Refresh
             </button>
           </div>
-
-          <!-- Loading state -->
-          <div id="friendsLoading" class="text-gray-500 text-center py-8">
-            <div
-              class="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"
-            ></div>
-            Loading friends...
+          <div id="conversationsList" class="space-y-3">
+            <!-- All conversations will be loaded here -->
           </div>
-
-          <!-- No friends message -->
-          <div id="noFriends" class="text-gray-500 text-center py-8 hidden">
-            <svg
-              class="w-12 h-12 text-gray-300 mx-auto mb-3"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-              ></path>
-            </svg>
-            <p class="text-sm">No friends yet</p>
-            <p class="text-xs text-gray-400 mt-1">
-              Add friends to start chatting
-            </p>
+          <div
+            id="noConversations"
+            class="text-center py-8 text-gray-500 hidden"
+          >
+            <p>No conversations yet. Start chatting with someone!</p>
           </div>
-
-          <!-- Friends list -->
-          <div id="friendsList" class="space-y-2 hidden">
-            <!-- Friends will be populated here -->
+          <div id="conversationsLoading" class="text-center py-8 text-gray-500">
+            <p>Loading conversations...</p>
           </div>
         </div>
       </div>
 
       <!-- Chat Area -->
-      <div class="lg:col-span-3">
+      <div class="lg:col-span-2">
         <!-- No friend selected state -->
         <div
           id="noFriendSelected"
@@ -183,29 +148,28 @@ content %}
   </div>
 </main>
 
-<!-- Friend Template -->
-<template id="friendTemplate">
+<!-- Templates -->
+<template id="unifiedConversationTemplate">
   <div
-    class="friend-item bg-gray-50 rounded-lg p-3 border border-gray-200 hover:bg-gray-100 transition-colors duration-200 cursor-pointer relative"
+    class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
   >
-    <div class="flex items-center space-x-3">
+    <div
+      class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold"
+    >
+      <span class="conversation-avatar"></span>
+    </div>
+    <div class="flex-1 min-w-0">
+      <p
+        class="text-sm font-medium text-gray-900 truncate conversation-username"
+      ></p>
+      <p class="text-xs text-gray-500 truncate conversation-last-message"></p>
+    </div>
+    <div class="flex items-center space-x-2">
+      <div class="status-indicator w-2 h-2 bg-green-500 rounded-full"></div>
       <div
-        class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm"
+        class="unread-badge hidden bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium"
       >
-        <!-- Avatar placeholder -->
-      </div>
-      <div class="flex-1 min-w-0">
-        <p class="text-gray-900 font-medium text-sm truncate"></p>
-        <p class="text-gray-500 text-xs truncate"></p>
-      </div>
-      <div class="flex items-center space-x-2">
-        <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-        <!-- Unread message count badge -->
-        <div
-          class="unread-badge hidden bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium"
-        >
-          <!-- Unread count will be inserted here -->
-        </div>
+        <span class="unread-count"></span>
       </div>
     </div>
   </div>

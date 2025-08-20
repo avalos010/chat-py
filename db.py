@@ -133,12 +133,45 @@ class Database:
         return verify_password(password, user.password)
 
     # Friend-related methods
-    async def send_friend_request(self, from_user_id: int, to_user_id: int):
-        """Send a friend request from one user to another"""
+    async def send_friend_request(self, user_id: int, friend_id: int):
+        """Send a friend request to another user"""
         try:
+            # Check if already friends
+            existing_friendship = await self.conn.execute(
+                "SELECT * FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
+                (user_id, friend_id, friend_id, user_id)
+            )
+            existing = await existing_friendship.fetchone()
+            
+            if existing:
+                # Check if it's already accepted
+                if existing[3] == 'accepted':  # status column
+                    return False  # Already friends
+                elif existing[3] == 'pending':
+                    # Check if this is a mutual request (both users sent requests to each other)
+                    if existing[1] == user_id and existing[2] == friend_id:
+                        # User is sending to friend, check if friend also sent to user
+                        mutual_check = await self.conn.execute(
+                            "SELECT * FROM friends WHERE user_id = ? AND friend_id = ? AND status = 'pending'",
+                            (friend_id, user_id)
+                        )
+                        mutual = await mutual_check.fetchone()
+                        
+                        if mutual:
+                            # Mutual request detected! Auto-accept both
+                            await self.conn.execute(
+                                "UPDATE friends SET status = 'accepted' WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
+                                (user_id, friend_id, friend_id, user_id)
+                            )
+                            await self.commit()
+                            return True  # Mutual friendship created
+                    
+                    return False  # Request already exists
+            
+            # Insert new friend request
             await self.conn.execute(
                 "INSERT INTO friends (user_id, friend_id, status) VALUES (?, ?, 'pending')",
-                (from_user_id, to_user_id)
+                (user_id, friend_id)
             )
             await self.commit()
             return True
@@ -271,8 +304,9 @@ class Database:
             return []
 
     async def remove_friend(self, user_id: int, friend_id: int):
-        """Remove a friend (delete both friendship records)"""
+        """Remove a friend (delete both friendship records) but preserve messages"""
         try:
+            # Delete friendship records but keep messages
             await self.conn.execute(
                 "DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
                 (user_id, friend_id, friend_id, user_id)
@@ -282,6 +316,103 @@ class Database:
         except Exception as e:
             print(f"Error removing friend: {e}")
             return False
+
+    async def get_conversation_with_anyone(self, user1_id: int, user2_id: int, limit: int = 50):
+        """Get conversation between two users regardless of friendship status"""
+        try:
+            cursor = await self.conn.execute("""
+                SELECT 
+                    m.id,
+                    m.sender_id,
+                    m.recipient_id,
+                    m.message_text,
+                    m.timestamp,
+                    m.is_read,
+                    u.username as sender_username
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                WHERE (m.sender_id = ? AND m.recipient_id = ?) 
+                   OR (m.sender_id = ? AND m.recipient_id = ?)
+                ORDER BY m.timestamp ASC
+                LIMIT ?
+            """, (user1_id, user2_id, user2_id, user1_id, limit))
+            
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "sender_id": row[1],
+                    "recipient_id": row[2],
+                    "message_text": row[3],
+                    "timestamp": row[4],
+                    "is_read": bool(row[5]),
+                    "sender_username": row[6]
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            print(f"Error getting conversation with anyone: {e}")
+            return []
+
+    async def get_recent_conversations(self, user_id: int, limit: int = 10):
+        """Get recent conversations for a user (including former friends)"""
+        try:
+            # Simpler query that gets the most recent message for each conversation
+            cursor = await self.conn.execute("""
+                WITH recent_messages AS (
+                    SELECT 
+                        CASE 
+                            WHEN m.sender_id = ? THEN m.recipient_id
+                            ELSE m.sender_id
+                        END as other_user_id,
+                        m.message_text,
+                        m.timestamp,
+                        m.sender_id,
+                        m.recipient_id,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY 
+                                CASE 
+                                    WHEN m.sender_id = ? THEN m.recipient_id
+                                    ELSE m.sender_id
+                                END
+                            ORDER BY m.timestamp DESC
+                        ) as rn
+                    FROM messages m
+                    WHERE m.sender_id = ? OR m.recipient_id = ?
+                )
+                SELECT 
+                    rm.other_user_id,
+                    u.username,
+                    u.email,
+                    rm.timestamp as last_message_time,
+                    rm.message_text as last_message_text,
+                    (
+                        SELECT COUNT(*) 
+                        FROM messages m2 
+                        WHERE m2.sender_id = ? AND m2.recipient_id = rm.other_user_id AND m2.is_read = FALSE
+                    ) as unread_count
+                FROM recent_messages rm
+                JOIN users u ON rm.other_user_id = u.id
+                WHERE rm.rn = 1
+                ORDER BY rm.timestamp DESC
+                LIMIT ?
+            """, (user_id, user_id, user_id, user_id, user_id, limit))
+            
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "user_id": row[0],
+                    "username": row[1],
+                    "email": row[2],
+                    "last_message_time": row[3],
+                    "last_message_text": row[4] or "No messages yet",
+                    "unread_count": row[5]
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            print(f"Error getting recent conversations: {e}")
+            return []
 
     async def save_message(self, sender_id: int, recipient_id: int, message_text: str):
         """Save a new message to the database"""
@@ -360,6 +491,19 @@ class Database:
             print(f"Error getting unread message count: {e}")
             return 0
 
+    async def get_unread_message_count_for_conversation(self, user_id: int, other_user_id: int):
+        """Get count of unread messages from a specific user in conversation"""
+        try:
+            cursor = await self.conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE recipient_id = ? AND sender_id = ? AND is_read = FALSE",
+                (user_id, other_user_id)
+            )
+            result = await cursor.fetchone()
+            return result[0] if result else 0
+        except Exception as e:
+            print(f"Error getting unread message count for conversation: {e}")
+            return 0
+
     async def search_users(self, search_term: str, exclude_user_id: int = None):
         """Search for users by username (excluding the current user)"""
         try:
@@ -389,4 +533,49 @@ class Database:
             ]
         except Exception as e:
             print(f"Error searching users: {e}")
+            return []
+
+    async def get_all_pending_requests(self, user_id: int):
+        """Get all pending friend requests for a user (both incoming and outgoing)"""
+        try:
+            cursor = await self.conn.execute("""
+                SELECT 
+                    f.id,
+                    f.user_id,
+                    f.friend_id,
+                    f.status,
+                    f.created_at,
+                    u.username,
+                    u.email,
+                    CASE 
+                        WHEN f.user_id = ? THEN 'outgoing'
+                        ELSE 'incoming'
+                    END as request_type
+                FROM friends f
+                JOIN users u ON (
+                    CASE 
+                        WHEN f.user_id = ? THEN f.friend_id
+                        ELSE f.user_id
+                    END = u.id
+                )
+                WHERE (f.user_id = ? OR f.friend_id = ?) AND f.status = 'pending'
+                ORDER BY f.created_at DESC
+            """, (user_id, user_id, user_id, user_id))
+            
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "user_id": row[1],
+                    "friend_id": row[2],
+                    "status": row[3],
+                    "created_at": row[4],
+                    "username": row[5],
+                    "email": row[6],
+                    "request_type": row[7]
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            print(f"Error getting all pending requests: {e}")
             return []

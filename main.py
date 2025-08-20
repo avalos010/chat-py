@@ -263,6 +263,22 @@ async def get_conversation(request: Request, friend_id: int):
     conversation = await db.get_conversation(user.id, friend_id)
     return {"conversation": conversation}
 
+@app.get("/api/conversation/{user_id}/anyone")
+async def get_conversation_with_anyone(request: Request, user_id: int):
+    """Get conversation history with any user (including former friends)"""
+    current_user = await get_current_user_from_request(request)
+    
+    # Allow viewing conversations with anyone (for chat history preservation)
+    conversation = await db.get_conversation_with_anyone(current_user.id, user_id)
+    return {"conversation": conversation}
+
+@app.get("/api/recent-conversations")
+async def get_recent_conversations(request: Request):
+    """Get recent conversations for current user (including former friends)"""
+    user = await get_current_user_from_request(request)
+    conversations = await db.get_recent_conversations(user.id)
+    return {"conversations": conversations}
+
 @app.post("/api/conversation/{friend_id}/mark-read")
 async def mark_conversation_read(request: Request, friend_id: int):
     """Mark messages from a specific friend as read"""
@@ -286,6 +302,13 @@ async def get_friend_requests(request: Request):
     """Get pending friend requests for current user"""
     user = await get_current_user_from_request(request)
     requests = await db.get_friend_requests(user.id)
+    return {"requests": requests}
+
+@app.get("/api/all-friend-requests")
+async def get_all_friend_requests(request: Request):
+    """Get all pending friend requests (both incoming and outgoing) for current user"""
+    user = await get_current_user_from_request(request)
+    requests = await db.get_all_pending_requests(user.id)
     return {"requests": requests}
 
 @app.get("/api/sent-friend-requests")

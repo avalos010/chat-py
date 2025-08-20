@@ -18,9 +18,9 @@ class ChatApp {
   private sendButton: HTMLButtonElement | null;
   private messagesContainer: HTMLDivElement | null;
   private noMessagesElement: HTMLDivElement | null;
-  private friendsListElement: HTMLDivElement | null;
-  private friendsLoadingElement: HTMLDivElement | null;
-  private noFriendsElement: HTMLDivElement | null;
+  private conversationsList: HTMLElement | null = null;
+  private noConversations: HTMLElement | null = null;
+  private conversationsLoading: HTMLElement | null = null;
   private connectionStatusElement: HTMLSpanElement | null;
   private userInfoElement: HTMLSpanElement | null;
   private token: string | null = null;
@@ -35,7 +35,7 @@ class ChatApp {
   private selectedFriend: Friend | null = null;
   private conversations: Map<number, ChatMessage[]> = new Map();
   private refreshInterval: NodeJS.Timeout | null = null;
-  private refreshFriendsButton: HTMLButtonElement | null = null;
+  private refreshConversationsButton: HTMLButtonElement | null = null;
 
   constructor() {
     this.messageInput = document.getElementById(
@@ -50,15 +50,11 @@ class ChatApp {
     this.noMessagesElement = document.getElementById(
       "noMessages"
     ) as HTMLDivElement;
-    this.friendsListElement = document.getElementById(
-      "friendsList"
+    this.conversationsList = document.getElementById(
+      "conversationsList"
     ) as HTMLDivElement;
-    this.friendsLoadingElement = document.getElementById(
-      "friendsLoading"
-    ) as HTMLDivElement;
-    this.noFriendsElement = document.getElementById(
-      "noFriends"
-    ) as HTMLDivElement;
+    this.noConversations = document.getElementById("noConversations");
+    this.conversationsLoading = document.getElementById("conversationsLoading");
     this.connectionStatusElement = document.getElementById(
       "connectionStatus"
     ) as HTMLSpanElement;
@@ -77,9 +73,6 @@ class ChatApp {
     this.selectedFriendStatusElement = document.getElementById(
       "selectedFriendStatus"
     );
-    this.refreshFriendsButton = document.getElementById(
-      "refreshFriends"
-    ) as HTMLButtonElement;
 
     if (!this.messageInput || !this.sendButton || !this.messagesContainer) {
       throw new Error("Required DOM elements not found");
@@ -90,30 +83,57 @@ class ChatApp {
   }
 
   private async initialize(): Promise<void> {
-    // Check authentication first
-    await this.checkAuthentication();
+    console.log("=== Chat initialization started ===");
+    try {
+      console.log("About to check authentication...");
+      // Check authentication first
+      await this.checkAuthentication();
+      console.log("Authentication check completed successfully");
 
-    // Load friends list
-    this.loadFriendsList();
+      console.log("About to load unified conversations...");
+      // Load unified conversations list (includes friends and former friends)
+      this.loadUnifiedConversations();
 
-    // Initialize WebSocket with authentication
-    this.initializeWebSocket();
-    this.addEventListeners();
+      console.log("About to initialize WebSocket...");
+      // Initialize WebSocket with authentication
+      this.initializeWebSocket();
+      this.addEventListeners();
 
-    // Set user info
-    this.setUserInfo();
+      console.log("About to set user info...");
+      // Set user info
+      this.setUserInfo();
 
-    // Set up automatic refresh every 30 seconds
-    this.setupAutoRefresh();
+      console.log("About to setup auto refresh...");
+      // Set up automatic refresh every 30 seconds
+      this.setupAutoRefresh();
+
+      console.log("=== Chat initialization completed successfully ===");
+    } catch (error) {
+      console.error("Chat initialization failed:", error);
+      // Don't redirect if there's an initialization error - just log it
+      // This prevents redirect loops
+    }
   }
 
   private async checkAuthentication(): Promise<void> {
+    console.log("=== checkAuthentication called ===");
     const token = localStorage.getItem("token");
+    console.log("Token found:", !!token);
+    console.log("Current pathname:", window.location.pathname);
+
     if (!token) {
-      window.location.href = "/login";
+      console.log("No token found, checking if we need to redirect...");
+      // Only redirect if we're not already on the login page
+      if (window.location.pathname !== "/login") {
+        console.log("Redirecting to login...");
+        window.location.href = "/login";
+      } else {
+        console.log("Already on login page, no redirect needed");
+      }
       return;
     }
 
+    console.log("Token found, checking with server...");
     try {
       const response = await fetch("/check-auth", {
         headers: {
@@ -121,80 +141,104 @@ class ChatApp {
         },
       });
 
+      console.log("Server response status:", response.status);
+      console.log("Server response ok:", response.ok);
+
       if (!response.ok) {
+        console.log("Authentication check failed, clearing token");
         localStorage.removeItem("token");
-        window.location.href = "/login";
+        // Only redirect if we're not already on the login page
+        if (window.location.pathname !== "/login") {
+          console.log("Redirecting to login due to auth failure...");
+          window.location.href = "/login";
+        } else {
+          console.log("Already on login page, no redirect needed");
+        }
         return;
       }
+
+      console.log("Authentication check successful");
     } catch (error) {
       console.error("Authentication check failed:", error);
-      localStorage.removeItem("token");
-      window.location.href = "/login";
-      return;
+      // Don't clear token on network errors - just log the error
+      // This prevents losing authentication due to temporary network issues
+      console.log("Network error during auth check, keeping token");
     }
   }
 
-  private async loadFriendsList(): Promise<void> {
+  private async loadUnifiedConversations(): Promise<void> {
     try {
-      const response = await fetch("/api/friends", {
+      console.log("Loading unified conversations...");
+      const response = await fetch("/api/recent-conversations", {
         headers: {
           Authorization: `Bearer ${this.token}`,
         },
       });
 
+      console.log("Response status:", response.status);
       if (response.ok) {
         const data = await response.json();
-        this.displayFriends(data.friends);
+        console.log("Received conversations data:", data);
+        this.displayUnifiedConversations(data.conversations);
       } else {
-        console.error("Failed to load friends");
-        this.showNoFriends();
+        console.error("Failed to load unified conversations");
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        this.showNoConversations();
       }
     } catch (error) {
-      console.error("Error loading friends:", error);
-      this.showNoFriends();
+      console.error("Error loading unified conversations:", error);
+      this.showNoConversations();
     }
   }
 
-  private displayFriends(friends: Friend[]): void {
+  private displayUnifiedConversations(conversations: any[]): void {
+    console.log("Displaying conversations:", conversations);
     if (
-      !this.friendsListElement ||
-      !this.friendsLoadingElement ||
-      !this.noFriendsElement
-    )
-      return;
-
-    // Hide loading
-    this.friendsLoadingElement.classList.add("hidden");
-
-    if (friends.length === 0) {
-      this.noFriendsElement.classList.remove("hidden");
+      !this.conversationsList ||
+      !this.noConversations ||
+      !this.conversationsLoading
+    ) {
+      console.error("Missing DOM elements:", {
+        conversationsList: !!this.conversationsList,
+        noConversations: !!this.noConversations,
+        conversationsLoading: !!this.conversationsLoading,
+      });
       return;
     }
 
-    // Show friends list
-    this.friendsListElement.classList.remove("hidden");
-    this.noFriendsElement.classList.add("hidden");
+    // Hide loading
+    this.conversationsLoading.classList.add("hidden");
+    console.log("Hidden loading, conversations count:", conversations.length);
 
-    // Clear existing friends
-    this.friendsListElement.innerHTML = "";
+    if (conversations.length === 0) {
+      console.log("No conversations, showing no conversations message");
+      this.noConversations.classList.remove("hidden");
+      return;
+    }
 
-    // Add friends
-    friends.forEach((friend) => {
-      const friendElement = this.createFriendElement(friend);
-      this.friendsListElement!.appendChild(friendElement);
+    // Show conversations list
+    this.conversationsList.classList.remove("hidden");
+    this.noConversations.classList.add("hidden");
+    console.log("Showing conversations list");
+
+    // Clear existing conversations
+    this.conversationsList.innerHTML = "";
+
+    // Add conversations
+    conversations.forEach((conv, index) => {
+      console.log(`Creating conversation element ${index}:`, conv);
+      const convElement = this.createUnifiedConversationElement(conv);
+      if (this.conversationsList) {
+        this.conversationsList.appendChild(convElement);
+        console.log(`Added conversation element ${index}`);
+      }
     });
   }
 
-  private showNoFriends(): void {
-    if (!this.friendsLoadingElement || !this.noFriendsElement) return;
-
-    this.friendsLoadingElement.classList.add("hidden");
-    this.noFriendsElement.classList.remove("hidden");
-  }
-
-  private createFriendElement(friend: Friend): HTMLElement {
+  private createUnifiedConversationElement(conversation: any): HTMLElement {
     const template = document.getElementById(
-      "friendTemplate"
+      "unifiedConversationTemplate"
     ) as HTMLTemplateElement;
     if (!template) return document.createElement("div");
 
@@ -202,32 +246,77 @@ class ChatApp {
     const element = clone.firstElementChild as HTMLElement;
     if (!element) return document.createElement("div");
 
-    // Set friend info
-    const avatar = element.querySelector(".w-8.h-8") as HTMLElement;
-    const username = element.querySelector("p:first-of-type") as HTMLElement;
-    const email = element.querySelector("p:last-of-type") as HTMLElement;
+    // Set conversation info
+    const avatar = element.querySelector(".conversation-avatar") as HTMLElement;
+    const username = element.querySelector(
+      ".conversation-username"
+    ) as HTMLElement;
+    const lastMessage = element.querySelector(
+      ".conversation-last-message"
+    ) as HTMLElement;
     const unreadBadge = element.querySelector(".unread-badge") as HTMLElement;
+    const statusIndicator = element.querySelector(
+      ".status-indicator"
+    ) as HTMLElement;
 
-    if (avatar) avatar.textContent = friend.username.charAt(0).toUpperCase();
-    if (username) username.textContent = friend.username;
-    if (email) email.textContent = friend.email;
+    if (avatar)
+      avatar.textContent = conversation.username.charAt(0).toUpperCase();
+    if (username) username.textContent = conversation.username;
+
+    if (lastMessage) {
+      // Show last message text and time
+      const lastMessageTime = new Date(conversation.last_message_time);
+      const now = new Date();
+      const diffInHours =
+        (now.getTime() - lastMessageTime.getTime()) / (1000 * 60 * 60);
+
+      if (diffInHours < 24) {
+        lastMessage.textContent = `${
+          conversation.last_message_text
+        } • ${lastMessageTime.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+      } else {
+        lastMessage.textContent = `${
+          conversation.last_message_text
+        } • ${lastMessageTime.toLocaleDateString()}`;
+      }
+    }
 
     // Handle unread message count
-    if (unreadBadge && friend.unread_count && friend.unread_count > 0) {
-      unreadBadge.textContent = friend.unread_count.toString();
+    if (
+      unreadBadge &&
+      conversation.unread_count &&
+      conversation.unread_count > 0
+    ) {
+      unreadBadge.textContent = conversation.unread_count.toString();
       unreadBadge.classList.remove("hidden");
     }
 
-    // Add click handler for friend selection
+    // Set status indicator (online/offline based on friendship)
+    if (statusIndicator) {
+      // For now, assume all conversations are with current friends
+      // You could enhance this by checking friendship status
+      statusIndicator.className = "w-2 h-2 bg-green-500 rounded-full";
+    }
+
+    // Add click handler for conversation selection
     element.addEventListener("click", () => {
-      this.selectFriend(friend);
+      this.selectUnifiedConversation(conversation);
     });
 
     return element;
   }
 
-  private selectFriend(friend: Friend): void {
-    this.selectedFriend = friend;
+  private selectUnifiedConversation(conversation: any): void {
+    this.selectedFriend = {
+      friend_id: conversation.user_id,
+      username: conversation.username,
+      email: conversation.email || "",
+      status: "online",
+      unread_count: conversation.unread_count || 0,
+    };
 
     // Update UI to show selected friend
     if (this.noFriendSelectedElement && this.chatConversationElement) {
@@ -236,13 +325,12 @@ class ChatApp {
     }
 
     // Update friend info in chat header
-    if (this.selectedFriendAvatarElement) {
-      this.selectedFriendAvatarElement.textContent = friend.username
-        .charAt(0)
-        .toUpperCase();
+    if (this.selectedFriendAvatarElement && this.selectedFriend) {
+      this.selectedFriendAvatarElement.textContent =
+        this.selectedFriend.username.charAt(0).toUpperCase();
     }
-    if (this.selectedFriendNameElement) {
-      this.selectedFriendNameElement.textContent = friend.username;
+    if (this.selectedFriendNameElement && this.selectedFriend) {
+      this.selectedFriendNameElement.textContent = this.selectedFriend.username;
     }
     if (this.selectedFriendStatusElement) {
       this.selectedFriendStatusElement.textContent = "● Online";
@@ -250,17 +338,30 @@ class ChatApp {
     }
 
     // Load conversation history for this friend
-    this.loadConversation(friend.friend_id);
+    if (this.selectedFriend) {
+      this.loadConversation(this.selectedFriend.friend_id);
 
-    // Mark messages as read
-    this.markMessagesAsRead(friend.friend_id);
+      // Mark messages as read
+      this.markMessagesAsRead(this.selectedFriend.friend_id);
+    }
 
     // Focus on message input
     if (this.messageInput) {
       this.messageInput.focus();
     }
 
-    console.log(`Selected friend: ${friend.username}`);
+    if (this.selectedFriend) {
+      console.log(
+        `Selected unified conversation: ${this.selectedFriend.username}`
+      );
+    }
+  }
+
+  private showNoConversations(): void {
+    if (!this.conversationsLoading || !this.noConversations) return;
+
+    this.conversationsLoading.classList.add("hidden");
+    this.noConversations.classList.remove("hidden");
   }
 
   private async markMessagesAsRead(friendId: number): Promise<void> {
@@ -339,11 +440,24 @@ class ChatApp {
 
   private async loadConversationFromServer(friendId: number): Promise<void> {
     try {
-      const response = await fetch(`/api/conversation/${friendId}`, {
+      // Try to load conversation with current friend first
+      let response = await fetch(`/api/conversation/${friendId}`, {
         headers: {
           Authorization: `Bearer ${this.token}`,
         },
       });
+
+      // If that fails (e.g., they're no longer a friend), try the "anyone" endpoint
+      if (!response.ok && response.status === 403) {
+        console.log(
+          "User is no longer a friend, trying to load conversation history anyway..."
+        );
+        response = await fetch(`/api/conversation/${friendId}/anyone`, {
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+          },
+        });
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -575,86 +689,27 @@ class ChatApp {
       }
     });
 
-    // Add refresh button listener
-    if (this.refreshFriendsButton) {
-      this.refreshFriendsButton.addEventListener("click", () => {
-        this.refreshFriendsList();
+    // Add refresh button listeners
+    this.refreshConversationsButton = document.getElementById(
+      "refreshConversationsButton"
+    ) as HTMLButtonElement;
+    if (this.refreshConversationsButton) {
+      this.refreshConversationsButton.addEventListener("click", () => {
+        this.loadUnifiedConversations();
       });
     }
   }
 
-  private async refreshFriendsList(): Promise<void> {
-    if (this.refreshFriendsButton) {
-      // Add loading state to refresh button
-      this.refreshFriendsButton.disabled = true;
-      this.refreshFriendsButton.innerHTML = `
-        <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-        </svg>
-      `;
-    }
-
-    try {
-      await this.loadFriendsList();
-
-      // Show success feedback
-      if (this.refreshFriendsButton) {
-        this.refreshFriendsButton.innerHTML = `
-          <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-        `;
-
-        // Reset button after 2 seconds
-        setTimeout(() => {
-          if (this.refreshFriendsButton) {
-            this.refreshFriendsButton.innerHTML = `
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-              </svg>
-            `;
-            this.refreshFriendsButton.disabled = false;
-          }
-        }, 2000);
-      }
-    } catch (error) {
-      console.error("Failed to refresh friends:", error);
-
-      // Show error feedback
-      if (this.refreshFriendsButton) {
-        this.refreshFriendsButton.innerHTML = `
-          <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-          </svg>
-        `;
-
-        // Reset button after 2 seconds
-        setTimeout(() => {
-          if (this.refreshFriendsButton) {
-            this.refreshFriendsButton.innerHTML = `
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-              </svg>
-            `;
-            this.refreshFriendsButton.disabled = false;
-          }
-        }, 2000);
-      }
-    }
-  }
-
   private setupAutoRefresh(): void {
-    if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
-    }
+    // Set up automatic refresh every 30 seconds
     this.refreshInterval = setInterval(() => {
-      this.loadFriendsList();
+      this.loadUnifiedConversations();
     }, 30000); // Refresh every 30 seconds
 
-    // Also refresh when the page becomes visible (user switches back to tab)
+    // Also refresh when the page becomes visible
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
-        this.loadFriendsList();
+        this.loadUnifiedConversations();
       }
     });
   }

@@ -132,27 +132,39 @@ async function handlePageLoadAuth(): Promise<void> {
 
   if (token) {
     console.log("Checking server auth...");
-    const isAuth = await checkServerAuth();
-    console.log("Server auth result:", isAuth);
+    try {
+      const isAuth = await checkServerAuth();
+      console.log("Server auth result:", isAuth);
 
-    if (isAuth) {
-      console.log("User is authenticated, checking if redirect needed...");
-      console.log("Current pathname:", window.location.pathname);
+      if (isAuth) {
+        console.log("User is authenticated, checking if redirect needed...");
+        console.log("Current pathname:", window.location.pathname);
 
-      // If user is authenticated and on login/signup pages, redirect to chat
-      if (
-        window.location.pathname === "/login" ||
-        window.location.pathname === "/signup"
-      ) {
-        console.log(
-          "User is authenticated, redirecting from login/signup to chat"
-        );
-        window.location.href = "/chat";
-        return;
+        // If user is authenticated and on login/signup pages, redirect to chat
+        if (
+          window.location.pathname === "/login" ||
+          window.location.pathname === "/signup"
+        ) {
+          console.log(
+            "User is authenticated, redirecting from login/signup to chat"
+          );
+          // Simple redirect without flags
+          window.location.href = "/chat";
+          return;
+        }
+      } else {
+        console.log("Token is invalid, clearing it");
+        localStorage.removeItem("token");
+        // Only redirect to login if not already there
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
       }
-    } else {
-      console.log("Token is invalid, clearing it");
-      localStorage.removeItem("token");
+    } catch (error) {
+      console.error("Server auth check failed:", error);
+      // Don't redirect on error, just log it
+      // This prevents losing authentication due to temporary server issues
+      console.log("Server auth check failed, but keeping token for now");
     }
   } else {
     console.log("No token found, staying on current page");
