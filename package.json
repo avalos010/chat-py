@@ -6,7 +6,7 @@
     "watch:ts": "tsc --watch",
     "watch:css": "tailwindcss -i ./static/css/main.css -o ./static/css/styles.css --watch",
     "build:js": "esbuild src/**/*.ts --bundle --format=esm --outdir=static/js",
-    "watch:js": "esbuild src/**/*.ts --bundle --format=esm --outdir=static/js --watch",
+    "watch:js": "esbuild src/**/*.ts --bundle --format=esm --outdir=static/js --watch=forever",
     "dev": "npm run watch:js & npm run watch:css"
   },
   "devDependencies": {

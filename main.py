@@ -23,6 +23,7 @@ from utils.security import (
 
 from db import Database
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
@@ -126,11 +127,11 @@ async def chat_route(request: Request):
     })
 
 @app.get("/login")
-async def login(request: Request):
+async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
     if not await db.verify_password(form_data.username, form_data.password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     # Generate a JWT token
@@ -239,7 +240,46 @@ async def get_friends(request: Request):
     """Get current user's friends list"""
     user = await get_current_user_from_request(request)
     friends = await db.get_friends_list(user.id)
+    
+    # Add unread message counts for each friend
+    for friend in friends:
+        unread_count = await db.get_unread_message_count(user.id, friend["friend_id"])
+        friend["unread_count"] = unread_count
+    
     return {"friends": friends}
+
+@app.get("/api/conversation/{friend_id}")
+async def get_conversation(request: Request, friend_id: int):
+    """Get conversation history with a specific friend"""
+    user = await get_current_user_from_request(request)
+    
+    # Verify they are friends
+    friends = await db.get_friends_list(user.id)
+    is_friend = any(friend["friend_id"] == friend_id for friend in friends)
+    
+    if not is_friend:
+        raise HTTPException(status_code=403, detail="Can only view conversations with friends")
+    
+    conversation = await db.get_conversation(user.id, friend_id)
+    return {"conversation": conversation}
+
+@app.post("/api/conversation/{friend_id}/mark-read")
+async def mark_conversation_read(request: Request, friend_id: int):
+    """Mark messages from a specific friend as read"""
+    user = await get_current_user_from_request(request)
+    
+    # Verify they are friends
+    friends = await db.get_friends_list(user.id)
+    is_friend = any(friend["friend_id"] == friend_id for friend in friends)
+    
+    if not is_friend:
+        raise HTTPException(status_code=403, detail="Can only mark messages from friends as read")
+    
+    success = await db.mark_messages_as_read(user.id, friend_id)
+    if success:
+        return {"message": "Messages marked as read"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to mark messages as read")
 
 @app.get("/api/friend-requests")
 async def get_friend_requests(request: Request):
@@ -372,20 +412,81 @@ async def websocket_endpoint(websocket: WebSocket):
                 return
                 
             await websocket.accept()
-            connections.append(websocket)
+            
+            # Store connection with user info
+            user_connection = {"websocket": websocket, "user_id": user.id, "username": user.username}
+            connections.append(user_connection)
+            
             try:
                 while True:
                     data = await websocket.receive_text()
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    message = f"[{timestamp}] {user.username}: {data}"
                     
-                    for connection in connections:
-                        await connection.send_text(message)
-            except:
-                connections.remove(websocket)
+                    try:
+                        # Parse the message data
+                        message_data = json.loads(data)
+                        
+                        # Extract message details
+                        message_text = message_data.get("text", "")
+                        recipient_username = message_data.get("recipient", "")
+                        
+                        if not message_text or not recipient_username:
+                            continue
+                        
+                        # Get recipient user
+                        recipient_user = await get_user(db, recipient_username)
+                        if not recipient_user:
+                            continue
+                        
+                        # Verify they are friends
+                        friends = await db.get_friends_list(user.id)
+                        is_friend = any(friend["friend_id"] == recipient_user.id for friend in friends)
+                        
+                        if not is_friend:
+                            continue
+                        
+                        # Save message to database
+                        await db.save_message(user.id, recipient_user.id, message_text)
+                        
+                        # Create message object to send
+                        message_to_send = {
+                            "type": "message",
+                            "sender_id": user.id,
+                            "sender_username": user.username,
+                            "recipient_id": recipient_user.id,
+                            "recipient_username": recipient_username,
+                            "message_text": message_text,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        
+                        # Send to recipient if they're online
+                        for conn in connections:
+                            if conn["user_id"] == recipient_user.id:
+                                try:
+                                    await conn["websocket"].send_text(json.dumps(message_to_send))
+                                except:
+                                    # Remove broken connection
+                                    connections.remove(conn)
+                        
+                        # Send confirmation back to sender
+                        confirmation = {
+                            "type": "message_sent",
+                            "message_id": "temp_id",  # You could get this from save_message if it returns the ID
+                            "timestamp": message_to_send["timestamp"]
+                        }
+                        await websocket.send_text(json.dumps(confirmation))
+                        
+                    except json.JSONDecodeError:
+                        # Handle non-JSON messages (fallback)
+                        continue
+                        
+            except Exception as e:
+                print(f"WebSocket error for user {user.username}: {e}")
+                connections.remove(user_connection)
+                
         except JWTError:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-    except:
+    except Exception as e:
+        print(f"WebSocket connection error: {e}")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
 
 

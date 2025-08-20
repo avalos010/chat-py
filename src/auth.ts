@@ -126,29 +126,32 @@ async function protectRoute(): Promise<void> {
 // Function to handle page load authentication
 async function handlePageLoadAuth(): Promise<void> {
   console.log("=== handlePageLoadAuth called ===");
+
   const token = localStorage.getItem("token");
   console.log("Token found:", !!token);
 
   if (token) {
     console.log("Checking server auth...");
-    // Check if token is valid on server
     const isAuth = await checkServerAuth();
     console.log("Server auth result:", isAuth);
 
     if (isAuth) {
       console.log("User is authenticated, checking if redirect needed...");
       console.log("Current pathname:", window.location.pathname);
-      console.log("Should redirect to chat?", window.location.pathname);
 
-      // User is authenticated, redirect to chat
-      if (window.location.pathname === "/login") {
-        console.log("Redirecting to chat from:", window.location.pathname);
+      // If user is authenticated and on login/signup pages, redirect to chat
+      if (
+        window.location.pathname === "/login" ||
+        window.location.pathname === "/signup"
+      ) {
+        console.log(
+          "User is authenticated, redirecting from login/signup to chat"
+        );
         window.location.href = "/chat";
         return;
       }
     } else {
       console.log("Token is invalid, clearing it");
-      // Token is invalid, clear it and stay on current page
       localStorage.removeItem("token");
     }
   } else {

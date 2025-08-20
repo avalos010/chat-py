@@ -8,6 +8,8 @@ interface Friend {
   friend_id: number;
   username: string;
   email: string;
+  status?: "online" | "offline";
+  unread_count?: number;
 }
 
 class ChatApp {
@@ -22,6 +24,18 @@ class ChatApp {
   private connectionStatusElement: HTMLSpanElement | null;
   private userInfoElement: HTMLSpanElement | null;
   private token: string | null = null;
+
+  // New elements for messenger interface
+  private noFriendSelectedElement: HTMLElement | null;
+  private chatConversationElement: HTMLElement | null;
+  private selectedFriendAvatarElement: HTMLElement | null;
+  private selectedFriendNameElement: HTMLElement | null;
+  private selectedFriendStatusElement: HTMLElement | null;
+
+  private selectedFriend: Friend | null = null;
+  private conversations: Map<number, ChatMessage[]> = new Map();
+  private refreshInterval: NodeJS.Timeout | null = null;
+  private refreshFriendsButton: HTMLButtonElement | null = null;
 
   constructor() {
     this.messageInput = document.getElementById(
@@ -52,6 +66,21 @@ class ChatApp {
       "userInfo"
     ) as HTMLSpanElement;
 
+    // New elements
+    this.noFriendSelectedElement = document.getElementById("noFriendSelected");
+    this.chatConversationElement = document.getElementById("chatConversation");
+    this.selectedFriendAvatarElement = document.getElementById(
+      "selectedFriendAvatar"
+    );
+    this.selectedFriendNameElement =
+      document.getElementById("selectedFriendName");
+    this.selectedFriendStatusElement = document.getElementById(
+      "selectedFriendStatus"
+    );
+    this.refreshFriendsButton = document.getElementById(
+      "refreshFriends"
+    ) as HTMLButtonElement;
+
     if (!this.messageInput || !this.sendButton || !this.messagesContainer) {
       throw new Error("Required DOM elements not found");
     }
@@ -73,6 +102,9 @@ class ChatApp {
 
     // Set user info
     this.setUserInfo();
+
+    // Set up automatic refresh every 30 seconds
+    this.setupAutoRefresh();
   }
 
   private async checkAuthentication(): Promise<void> {
@@ -174,10 +206,17 @@ class ChatApp {
     const avatar = element.querySelector(".w-8.h-8") as HTMLElement;
     const username = element.querySelector("p:first-of-type") as HTMLElement;
     const email = element.querySelector("p:last-of-type") as HTMLElement;
+    const unreadBadge = element.querySelector(".unread-badge") as HTMLElement;
 
     if (avatar) avatar.textContent = friend.username.charAt(0).toUpperCase();
     if (username) username.textContent = friend.username;
     if (email) email.textContent = friend.email;
+
+    // Handle unread message count
+    if (unreadBadge && friend.unread_count && friend.unread_count > 0) {
+      unreadBadge.textContent = friend.unread_count.toString();
+      unreadBadge.classList.remove("hidden");
+    }
 
     // Add click handler for friend selection
     element.addEventListener("click", () => {
@@ -188,9 +227,168 @@ class ChatApp {
   }
 
   private selectFriend(friend: Friend): void {
+    this.selectedFriend = friend;
+
     // Update UI to show selected friend
+    if (this.noFriendSelectedElement && this.chatConversationElement) {
+      this.noFriendSelectedElement.classList.add("hidden");
+      this.chatConversationElement.classList.remove("hidden");
+    }
+
+    // Update friend info in chat header
+    if (this.selectedFriendAvatarElement) {
+      this.selectedFriendAvatarElement.textContent = friend.username
+        .charAt(0)
+        .toUpperCase();
+    }
+    if (this.selectedFriendNameElement) {
+      this.selectedFriendNameElement.textContent = friend.username;
+    }
+    if (this.selectedFriendStatusElement) {
+      this.selectedFriendStatusElement.textContent = "● Online";
+      this.selectedFriendStatusElement.className = "text-sm text-green-600";
+    }
+
+    // Load conversation history for this friend
+    this.loadConversation(friend.friend_id);
+
+    // Mark messages as read
+    this.markMessagesAsRead(friend.friend_id);
+
+    // Focus on message input
+    if (this.messageInput) {
+      this.messageInput.focus();
+    }
+
     console.log(`Selected friend: ${friend.username}`);
-    // TODO: Implement friend selection logic for private messaging
+  }
+
+  private async markMessagesAsRead(friendId: number): Promise<void> {
+    try {
+      await fetch(`/api/conversation/${friendId}/mark-read`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      // Update the unread count display
+      this.updateUnreadCount(friendId, 0);
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+    }
+  }
+
+  private updateUnreadCount(friendId: number, count: number): void {
+    // Find the friend element and update the unread badge
+    const friendElements = document.querySelectorAll(".friend-item");
+    friendElements.forEach((element) => {
+      const usernameElement = element.querySelector("p:first-of-type");
+      if (
+        usernameElement &&
+        usernameElement.textContent === this.selectedFriend?.username
+      ) {
+        const unreadBadge = element.querySelector(".unread-badge");
+        if (unreadBadge) {
+          if (count > 0) {
+            unreadBadge.textContent = count.toString();
+            unreadBadge.classList.remove("hidden");
+          } else {
+            unreadBadge.classList.add("hidden");
+          }
+        }
+      }
+    });
+  }
+
+  private updateUnreadCountForFriend(username: string): void {
+    // Find the friend element and increment the unread badge
+    const friendElements = document.querySelectorAll(".friend-item");
+    friendElements.forEach((element) => {
+      const usernameElement = element.querySelector("p:first-of-type");
+      if (usernameElement && usernameElement.textContent === username) {
+        const unreadBadge = element.querySelector(".unread-badge");
+        if (unreadBadge) {
+          const currentCount = parseInt(unreadBadge.textContent || "0");
+          const newCount = currentCount + 1;
+          unreadBadge.textContent = newCount.toString();
+          unreadBadge.classList.remove("hidden");
+        }
+      }
+    });
+  }
+
+  private loadConversation(friendId: number): void {
+    // Get conversation from memory or load from server
+    const conversation = this.conversations.get(friendId) || [];
+
+    if (conversation.length === 0) {
+      // Load conversation history from server
+      this.loadConversationFromServer(friendId);
+    } else {
+      // Show messages
+      if (this.noMessagesElement && this.messagesContainer) {
+        this.noMessagesElement.classList.add("hidden");
+        this.messagesContainer.classList.remove("hidden");
+      }
+
+      // Display messages
+      this.displayMessages(conversation);
+    }
+  }
+
+  private async loadConversationFromServer(friendId: number): Promise<void> {
+    try {
+      const response = await fetch(`/api/conversation/${friendId}`, {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const messages = data.conversation.map((msg: any) => ({
+          text: msg.message_text,
+          timestamp: msg.timestamp,
+          sender: msg.sender_username,
+          sender_id: msg.sender_id,
+        }));
+
+        // Store in memory
+        this.conversations.set(friendId, messages);
+
+        if (messages.length === 0) {
+          // Show no messages state
+          if (this.noMessagesElement && this.messagesContainer) {
+            this.noMessagesElement.classList.remove("hidden");
+            this.messagesContainer.classList.add("hidden");
+          }
+        } else {
+          // Show messages
+          if (this.noMessagesElement && this.messagesContainer) {
+            this.noMessagesElement.classList.add("hidden");
+            this.messagesContainer.classList.remove("hidden");
+          }
+
+          // Display messages
+          this.displayMessages(messages);
+        }
+      } else {
+        console.error("Failed to load conversation");
+        // Show no messages state
+        if (this.noMessagesElement && this.messagesContainer) {
+          this.noMessagesElement.classList.remove("hidden");
+          this.messagesContainer.classList.add("hidden");
+        }
+      }
+    } catch (error) {
+      console.error("Error loading conversation:", error);
+      // Show no messages state
+      if (this.noMessagesElement && this.messagesContainer) {
+        this.noMessagesElement.classList.remove("hidden");
+        this.messagesContainer.classList.add("hidden");
+      }
+    }
   }
 
   private setUserInfo(): void {
@@ -222,26 +420,50 @@ class ChatApp {
     this.ws.onmessage = (event: MessageEvent) => {
       if (!this.messagesContainer || !this.noMessagesElement) return;
 
-      // Hide no messages state
-      this.noMessagesElement.classList.add("hidden");
-      this.messagesContainer.classList.remove("hidden");
-
-      // Parse message (assuming JSON format)
-      let messageData;
       try {
-        messageData = JSON.parse(event.data);
-      } catch {
-        // Fallback to plain text
-        messageData = {
-          text: event.data,
-          sender: "Unknown",
-          timestamp: new Date().toISOString(),
-        };
-      }
+        // Parse the message data
+        const messageData = JSON.parse(event.data);
 
-      const messageElement = this.createMessageElement(messageData);
-      this.messagesContainer.appendChild(messageElement);
-      this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        if (messageData.type === "message") {
+          // This is a chat message
+          const message: ChatMessage = {
+            text: messageData.message_text,
+            timestamp: messageData.timestamp,
+            sender: messageData.sender_username,
+          };
+
+          // Add to conversation if it's from the currently selected friend
+          if (
+            this.selectedFriend &&
+            (messageData.sender_username === this.selectedFriend.username ||
+              messageData.recipient_username === this.selectedFriend.username)
+          ) {
+            // Hide no messages state
+            this.noMessagesElement.classList.add("hidden");
+            this.messagesContainer.classList.remove("hidden");
+
+            // Add message to conversation
+            const conversation =
+              this.conversations.get(this.selectedFriend.friend_id) || [];
+            conversation.push(message);
+            this.conversations.set(this.selectedFriend.friend_id, conversation);
+
+            // Display the message
+            const messageElement = this.createMessageElement(message);
+            this.messagesContainer.appendChild(messageElement);
+            this.messagesContainer.scrollTop =
+              this.messagesContainer.scrollHeight;
+          } else {
+            // Message from someone else - update unread count
+            this.updateUnreadCountForFriend(messageData.sender_username);
+          }
+        } else if (messageData.type === "message_sent") {
+          // This is a confirmation that our message was sent
+          console.log("Message sent successfully:", messageData);
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
+      }
     };
 
     this.ws.onerror = (error) => {
@@ -290,27 +512,51 @@ class ChatApp {
     return element;
   }
 
+  private displayMessages(messages: ChatMessage[]): void {
+    if (!this.messagesContainer) return;
+
+    this.messagesContainer.innerHTML = "";
+    messages.forEach((message) => {
+      const messageElement = this.createMessageElement(message);
+      this.messagesContainer!.appendChild(messageElement);
+    });
+
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+  }
+
   private sendMessage(): void {
-    if (!this.messageInput || !this.ws) return;
+    if (!this.messageInput || !this.ws || !this.selectedFriend) return;
 
     const message = this.messageInput.value.trim();
     if (message) {
-      // Create message object
+      // Create message object for WebSocket
       const messageData = {
+        text: message,
+        recipient: this.selectedFriend.username,
+      };
+
+      // Send message via WebSocket
+      this.ws.send(JSON.stringify(messageData));
+
+      // Create local message object
+      const localMessage: ChatMessage = {
         text: message,
         timestamp: new Date().toISOString(),
         sender: localStorage.getItem("username") || "You",
       };
 
-      // Send message via WebSocket
-      this.ws.send(JSON.stringify(messageData));
+      // Add message to local conversation
+      const conversation =
+        this.conversations.get(this.selectedFriend.friend_id) || [];
+      conversation.push(localMessage);
+      this.conversations.set(this.selectedFriend.friend_id, conversation);
 
       // Add message to local display
       if (this.messagesContainer && this.noMessagesElement) {
         this.noMessagesElement.classList.add("hidden");
         this.messagesContainer.classList.remove("hidden");
 
-        const messageElement = this.createMessageElement(messageData);
+        const messageElement = this.createMessageElement(localMessage);
         this.messagesContainer.appendChild(messageElement);
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
       }
@@ -328,6 +574,96 @@ class ChatApp {
         this.sendMessage();
       }
     });
+
+    // Add refresh button listener
+    if (this.refreshFriendsButton) {
+      this.refreshFriendsButton.addEventListener("click", () => {
+        this.refreshFriendsList();
+      });
+    }
+  }
+
+  private async refreshFriendsList(): Promise<void> {
+    if (this.refreshFriendsButton) {
+      // Add loading state to refresh button
+      this.refreshFriendsButton.disabled = true;
+      this.refreshFriendsButton.innerHTML = `
+        <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+      `;
+    }
+
+    try {
+      await this.loadFriendsList();
+
+      // Show success feedback
+      if (this.refreshFriendsButton) {
+        this.refreshFriendsButton.innerHTML = `
+          <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+        `;
+
+        // Reset button after 2 seconds
+        setTimeout(() => {
+          if (this.refreshFriendsButton) {
+            this.refreshFriendsButton.innerHTML = `
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+            `;
+            this.refreshFriendsButton.disabled = false;
+          }
+        }, 2000);
+      }
+    } catch (error) {
+      console.error("Failed to refresh friends:", error);
+
+      // Show error feedback
+      if (this.refreshFriendsButton) {
+        this.refreshFriendsButton.innerHTML = `
+          <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        `;
+
+        // Reset button after 2 seconds
+        setTimeout(() => {
+          if (this.refreshFriendsButton) {
+            this.refreshFriendsButton.innerHTML = `
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+            `;
+            this.refreshFriendsButton.disabled = false;
+          }
+        }, 2000);
+      }
+    }
+  }
+
+  private setupAutoRefresh(): void {
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval);
+    }
+    this.refreshInterval = setInterval(() => {
+      this.loadFriendsList();
+    }, 30000); // Refresh every 30 seconds
+
+    // Also refresh when the page becomes visible (user switches back to tab)
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        this.loadFriendsList();
+      }
+    });
+  }
+
+  private cleanup(): void {
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval);
+      this.refreshInterval = null;
+    }
   }
 }
 

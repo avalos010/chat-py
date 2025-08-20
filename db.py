@@ -41,6 +41,20 @@ class Database:
             )
         """)
         
+        # Messages table for storing chat messages
+        await self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY,
+                sender_id INTEGER NOT NULL,
+                recipient_id INTEGER NOT NULL,
+                message_text TEXT NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_read BOOLEAN DEFAULT FALSE,
+                FOREIGN KEY (sender_id) REFERENCES users (id),
+                FOREIGN KEY (recipient_id) REFERENCES users (id)
+            )
+        """)
+        
         await self.commit()
 
     async def connect(self):
@@ -268,6 +282,83 @@ class Database:
         except Exception as e:
             print(f"Error removing friend: {e}")
             return False
+
+    async def save_message(self, sender_id: int, recipient_id: int, message_text: str):
+        """Save a new message to the database"""
+        try:
+            await self.conn.execute(
+                "INSERT INTO messages (sender_id, recipient_id, message_text) VALUES (?, ?, ?)",
+                (sender_id, recipient_id, message_text)
+            )
+            await self.commit()
+            return True
+        except Exception as e:
+            print(f"Error saving message: {e}")
+            return False
+
+    async def get_conversation(self, user1_id: int, user2_id: int, limit: int = 50):
+        """Get conversation between two users"""
+        try:
+            cursor = await self.conn.execute("""
+                SELECT 
+                    m.id,
+                    m.sender_id,
+                    m.recipient_id,
+                    m.message_text,
+                    m.timestamp,
+                    m.is_read,
+                    u.username as sender_username
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                WHERE (m.sender_id = ? AND m.recipient_id = ?) 
+                   OR (m.sender_id = ? AND m.recipient_id = ?)
+                ORDER BY m.timestamp ASC
+                LIMIT ?
+            """, (user1_id, user2_id, user2_id, user1_id, limit))
+            
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "sender_id": row[1],
+                    "recipient_id": row[2],
+                    "message_text": row[3],
+                    "timestamp": row[4],
+                    "is_read": bool(row[5]),
+                    "sender_username": row[6]
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            print(f"Error getting conversation: {e}")
+            return []
+
+    async def mark_messages_as_read(self, user_id: int, sender_id: int):
+        """Mark messages from a specific sender as read"""
+        try:
+            await self.conn.execute(
+                "UPDATE messages SET is_read = TRUE WHERE recipient_id = ? AND sender_id = ? AND is_read = FALSE",
+                (user_id, sender_id)
+            )
+            await self.commit()
+            return True
+        except Exception as e:
+            print(f"Error marking messages as read: {e}")
+            return False
+
+    async def get_unread_message_count(self, user_id: int, friend_id: int):
+        """Get count of unread messages from a specific friend"""
+        # Force reload - ensure this method signature is correct
+        try:
+            cursor = await self.conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE recipient_id = ? AND sender_id = ? AND is_read = FALSE",
+                (user_id, friend_id)
+            )
+            result = await cursor.fetchone()
+            return result[0] if result else 0
+        except Exception as e:
+            print(f"Error getting unread message count: {e}")
+            return 0
 
     async def search_users(self, search_term: str, exclude_user_id: int = None):
         """Search for users by username (excluding the current user)"""
