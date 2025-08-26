@@ -328,6 +328,17 @@ async def cancel_friend_request(request: Request, friend_id: int):
     else:
         raise HTTPException(status_code=500, detail="Failed to cancel friend request")
 
+@app.get("/api/user/me")
+async def get_current_user_info(request: Request):
+    """Get current user information"""
+    user = await get_current_user_from_request(request)
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email
+    }
+
+
 @app.post("/api/friend-request/send")
 async def send_friend_request(request: Request, friend_data: FriendRequestData):
     """Send a friend request to another user"""
@@ -351,6 +362,15 @@ async def send_friend_request(request: Request, friend_data: FriendRequestData):
     
     success = await db.send_friend_request(user.id, friend_data.friend_id)
     if success:
+        # Get recipient user info for WebSocket notification
+        recipient_user = await db.get_user_by_id(friend_data.friend_id)
+        if recipient_user:
+            # Broadcast friend request update via WebSocket
+            await broadcast_friend_request_update(
+                user.id, user.username, 
+                recipient_user.id, recipient_user.username, 
+                "sent"
+            )
         return {"message": "Friend request sent successfully"}
     else:
         raise HTTPException(status_code=500, detail="Failed to send friend request")
@@ -361,6 +381,15 @@ async def accept_friend_request(request: Request, friend_data: FriendRequestData
     user = await get_current_user_from_request(request)
     success = await db.accept_friend_request(user.id, friend_data.friend_id)
     if success:
+        # Get sender user info for WebSocket notification
+        sender_user = await db.get_user_by_id(friend_data.friend_id)
+        if sender_user:
+            # Broadcast friend request update via WebSocket
+            await broadcast_friend_request_update(
+                sender_user.id, sender_user.username, 
+                user.id, user.username, 
+                "accepted"
+            )
         return {"message": "Friend request accepted"}
     else:
         raise HTTPException(status_code=500, detail="Failed to accept friend request")
@@ -371,6 +400,15 @@ async def reject_friend_request(request: Request, friend_data: FriendRequestData
     user = await get_current_user_from_request(request)
     success = await db.reject_friend_request(user.id, friend_data.friend_id)
     if success:
+        # Get sender user info for WebSocket notification
+        sender_user = await db.get_user_by_id(friend_data.friend_id)
+        if sender_user:
+            # Broadcast friend request update via WebSocket
+            await broadcast_friend_request_update(
+                sender_user.id, sender_user.username, 
+                user.id, user.username, 
+                "rejected"
+            )
         return {"message": "Friend request rejected"}
     else:
         raise HTTPException(status_code=500, detail="Failed to reject friend request")
@@ -440,6 +478,17 @@ async def websocket_endpoint(websocket: WebSocket):
             user_connection = {"websocket": websocket, "user_id": user.id, "username": user.username}
             connections.append(user_connection)
             
+            # Send initial connection confirmation
+            await websocket.send_text(json.dumps({
+                "type": "connection_established",
+                "user_id": user.id,
+                "username": user.username,
+                "timestamp": datetime.now().isoformat()
+            }))
+            
+            # Notify other users that this user is now online
+            await broadcast_user_status_update(user.id, user.username, "online")
+            
             try:
                 while True:
                     data = await websocket.receive_text()
@@ -448,55 +497,113 @@ async def websocket_endpoint(websocket: WebSocket):
                         # Parse the message data
                         message_data = json.loads(data)
                         
-                        # Extract message details
-                        message_text = message_data.get("text", "")
-                        recipient_username = message_data.get("recipient", "")
-                        
-                        if not message_text or not recipient_username:
-                            continue
-                        
-                        # Get recipient user
-                        recipient_user = await get_user(db, recipient_username)
-                        if not recipient_user:
-                            continue
-                        
-                        # Verify they are friends
-                        friends = await db.get_friends_list(user.id)
-                        is_friend = any(friend["friend_id"] == recipient_user.id for friend in friends)
-                        
-                        if not is_friend:
-                            continue
-                        
-                        # Save message to database
-                        await db.save_message(user.id, recipient_user.id, message_text)
-                        
-                        # Create message object to send
-                        message_to_send = {
-                            "type": "message",
-                            "sender_id": user.id,
-                            "sender_username": user.username,
-                            "recipient_id": recipient_user.id,
-                            "recipient_username": recipient_username,
-                            "message_text": message_text,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                        
-                        # Send to recipient if they're online
-                        for conn in connections:
-                            if conn["user_id"] == recipient_user.id:
-                                try:
-                                    await conn["websocket"].send_text(json.dumps(message_to_send))
-                                except:
-                                    # Remove broken connection
-                                    connections.remove(conn)
-                        
-                        # Send confirmation back to sender
-                        confirmation = {
-                            "type": "message_sent",
-                            "message_id": "temp_id",  # You could get this from save_message if it returns the ID
-                            "timestamp": message_to_send["timestamp"]
-                        }
-                        await websocket.send_text(json.dumps(confirmation))
+                        # Handle different message types
+                        if message_data.get("type") == "message" or (message_data.get("text") and message_data.get("recipient")):
+                            # This is a chat message
+                            message_text = message_data.get("text", "")
+                            recipient_username = message_data.get("recipient", "")
+                            
+                            if not message_text or not recipient_username:
+                                continue
+                            
+                            # Get recipient user
+                            recipient_user = await get_user(db, recipient_username)
+                            if not recipient_user:
+                                continue
+                            
+                            # Verify they are friends
+                            friends = await db.get_friends_list(user.id)
+                            is_friend = any(friend["friend_id"] == recipient_user.id for friend in friends)
+                            
+                            if not is_friend:
+                                continue
+                            
+                            # Save message to database
+                            await db.save_message(user.id, recipient_user.id, message_text)
+                            
+                            # Create message object to send
+                            message_to_send = {
+                                "type": "message",
+                                "sender_id": user.id,
+                                "sender_username": user.username,
+                                "recipient_id": recipient_user.id,
+                                "recipient_username": recipient_username,
+                                "message_text": message_text,
+                                "timestamp": datetime.now().isoformat(),
+                                "message_id": f"msg_{user.id}_{int(datetime.now().timestamp())}"
+                            }
+                            
+                            # Send to recipient if they're online
+                            for conn in connections:
+                                if conn["user_id"] == recipient_user.id:
+                                    try:
+                                        await conn["websocket"].send_text(json.dumps(message_to_send))
+                                        
+                                        # Also send a notification update
+                                        await conn["websocket"].send_text(json.dumps({
+                                            "type": "notification_update",
+                                            "notification_type": "new_message",
+                                            "sender_username": user.username,
+                                            "sender_id": user.id,
+                                            "message_preview": message_text[:50] + "..." if len(message_text) > 50 else message_text,
+                                            "timestamp": message_to_send["timestamp"]
+                                        }))
+                                    except:
+                                        # Remove broken connection
+                                        connections.remove(conn)
+                            
+                            # Send confirmation back to sender
+                            confirmation = {
+                                "type": "message_sent",
+                                "message_id": message_to_send["message_id"],
+                                "timestamp": message_to_send["timestamp"]
+                            }
+                            await websocket.send_text(json.dumps(confirmation))
+                            
+                        elif message_data.get("type") == "typing_indicator":
+                            # Handle typing indicator
+                            recipient_username = message_data.get("recipient", "")
+                            is_typing = message_data.get("isTyping", False)
+                            
+                            if recipient_username:
+                                recipient_user = await get_user(db, recipient_username)
+                                if recipient_user:
+                                    # Send typing indicator to recipient
+                                    typing_message = {
+                                        "type": "typing_indicator",
+                                        "username": user.username,
+                                        "isTyping": is_typing,
+                                        "timestamp": datetime.now().isoformat()
+                                    }
+                                    
+                                    for conn in connections:
+                                        if conn["user_id"] == recipient_user.id:
+                                            try:
+                                                await conn["websocket"].send_text(json.dumps(typing_message))
+                                            except:
+                                                connections.remove(conn)
+                                                
+                        elif message_data.get("type") == "read_receipt":
+                            # Handle read receipt
+                            message_id = message_data.get("message_id", "")
+                            
+                            if message_id:
+                                # Find the sender of the original message
+                                # For now, we'll broadcast to all connections
+                                # In a real app, you'd store message ownership in the database
+                                read_receipt = {
+                                    "type": "read_receipt",
+                                    "message_id": message_id,
+                                    "read_by": user.username,
+                                    "timestamp": datetime.now().isoformat()
+                                }
+                                
+                                # Send to all connections (in a real app, you'd send only to the message sender)
+                                for conn in connections:
+                                    try:
+                                        await conn["websocket"].send_text(json.dumps(read_receipt))
+                                    except:
+                                        connections.remove(conn)
                         
                     except json.JSONDecodeError:
                         # Handle non-JSON messages (fallback)
@@ -505,12 +612,54 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception as e:
                 print(f"WebSocket error for user {user.username}: {e}")
                 connections.remove(user_connection)
+                # Notify other users that this user is now offline
+                await broadcast_user_status_update(user.id, user.username, "offline")
                 
         except JWTError:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
     except Exception as e:
         print(f"WebSocket connection error: {e}")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+
+
+async def broadcast_user_status_update(user_id: int, username: str, status: str):
+    """Broadcast user status updates to all connected clients"""
+    status_message = {
+        "type": "user_status_update",
+        "user_id": user_id,
+        "username": username,
+        "status": status,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    for conn in connections:
+        try:
+            await conn["websocket"].send_text(json.dumps(status_message))
+        except:
+            # Remove broken connection
+            connections.remove(conn)
+
+
+async def broadcast_friend_request_update(sender_id: int, sender_username: str, recipient_id: int, recipient_username: str, request_type: str):
+    """Broadcast friend request updates to relevant users"""
+    request_message = {
+        "type": "friend_request_update",
+        "request_type": request_type,  # "sent", "received", "accepted", "declined"
+        "sender_id": sender_id,
+        "sender_username": sender_username,
+        "recipient_id": recipient_id,
+        "recipient_username": recipient_username,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    # Send to both sender and recipient if they're online
+    for conn in connections:
+        if conn["user_id"] in [sender_id, recipient_id]:
+            try:
+                await conn["websocket"].send_text(json.dumps(request_message))
+            except:
+                # Remove broken connection
+                connections.remove(conn)
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30

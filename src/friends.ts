@@ -23,6 +23,7 @@ interface Friend {
 
 class FriendsManager {
   private token: string | null = null;
+  private ws: WebSocket | null = null;
 
   constructor() {
     this.token = localStorage.getItem("token");
@@ -39,6 +40,7 @@ class FriendsManager {
     await this.loadAllFriendRequests(); // Load all requests directly
     // Removed loadSentFriendRequests() since it's now consolidated
     this.setupEventListeners();
+    this.initializeWebSocket();
   }
 
   private setupEventListeners(): void {
@@ -773,6 +775,109 @@ class FriendsManager {
 
   private async toggleAllRequestsView(): Promise<void> {
     // This method is no longer needed
+  }
+
+  private initializeWebSocket(): void {
+    // Use the same WebSocket endpoint as the main app
+    this.ws = new WebSocket(`ws://localhost:8000/ws?token=${this.token}`);
+
+    this.ws.onopen = () => {
+      console.log("Friends WebSocket connected");
+    };
+
+    this.ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        this.handleWebSocketMessage(message);
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
+      }
+    };
+
+    this.ws.onerror = (error) => {
+      console.error("Friends WebSocket error:", error);
+    };
+
+    this.ws.onclose = () => {
+      console.log("Friends WebSocket connection closed");
+    };
+  }
+
+  private handleWebSocketMessage(message: any): void {
+    const type = message.type;
+
+    switch (type) {
+      case "friend_request_update":
+        if (message.request_type === "sent") {
+          this.loadSentFriendRequests(); // Refresh sent friend requests
+        } else if (message.request_type === "received") {
+          this.loadAllFriendRequests(); // Refresh received friend requests
+        } else if (message.request_type === "accepted") {
+          this.loadAllFriendRequests(); // Refresh friend requests
+          this.loadFriendsList(); // Refresh friends list
+          this.showToastNotification(
+            `${message.sender_username} accepted your friend request!`
+          );
+        } else if (message.request_type === "rejected") {
+          this.loadAllFriendRequests(); // Refresh friend requests
+          this.showToastNotification(
+            `${message.sender_username} declined your friend request`
+          );
+        }
+        break;
+
+      case "user_status_update":
+        // Handle user online/offline status updates
+        console.log(`User ${message.username} is now ${message.status}`);
+        this.updateUserStatus(message.user_id, message.status);
+        break;
+
+      default:
+        // Ignore other message types (like chat messages)
+        break;
+    }
+  }
+
+  private updateUserStatus(userId: number, status: string): void {
+    // Update status indicators in the UI
+    const statusElements = document.querySelectorAll(
+      `[data-user-id="${userId}"] .status-indicator`
+    );
+    statusElements.forEach((element) => {
+      const statusElement = element as HTMLElement;
+      if (status === "online") {
+        statusElement.className = "w-2 h-2 bg-green-500 rounded-full";
+        statusElement.title = "Online";
+      } else {
+        statusElement.className = "w-2 h-2 bg-gray-400 rounded-full";
+        statusElement.title = "Offline";
+      }
+    });
+  }
+
+  private showToastNotification(message: string): void {
+    // Create toast notification
+    const toast = document.createElement("div");
+    toast.className =
+      "fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 translate-x-full";
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+      toast.classList.remove("translate-x-full");
+    }, 100);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      toast.classList.add("translate-x-full");
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+      }, 300);
+    }, 5000);
   }
 }
 

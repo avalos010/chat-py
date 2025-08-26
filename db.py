@@ -102,7 +102,6 @@ class Database:
         else:
             return None
 
-
     async def get_user_by_id(self, user_id: int):
         if not self.conn:
             return None
@@ -386,6 +385,7 @@ class Database:
                     u.email,
                     rm.timestamp as last_message_time,
                     rm.message_text as last_message_text,
+                    rm.sender_id as last_message_sender,
                     (
                         SELECT COUNT(*) 
                         FROM messages m2 
@@ -406,7 +406,8 @@ class Database:
                     "email": row[2],
                     "last_message_time": row[3],
                     "last_message_text": row[4] or "No messages yet",
-                    "unread_count": row[5]
+                    "last_message_sender": row[5],
+                    "unread_count": row[6]
                 }
                 for row in rows
             ]

@@ -2,6 +2,14 @@ interface ChatMessage {
   text: string;
   timestamp: string;
   sender: string;
+  isRead?: boolean;
+  messageId?: string;
+}
+
+interface TypingIndicator {
+  username: string;
+  isTyping: boolean;
+  timestamp: number;
 }
 
 interface Friend {
@@ -34,8 +42,16 @@ class ChatApp {
 
   private selectedFriend: Friend | null = null;
   private conversations: Map<number, ChatMessage[]> = new Map();
-  private refreshInterval: NodeJS.Timeout | null = null;
   private refreshConversationsButton: HTMLButtonElement | null = null;
+
+  // Typing indicator and read receipt system
+  private typingIndicators: Map<number, TypingIndicator> = new Map();
+  private typingTimeout: NodeJS.Timeout | null = null;
+  private lastTypingTime: number = 0;
+  private pendingReadReceipts: Set<string> = new Set();
+
+  // Current user info
+  private currentUserId: number | null = null;
 
   constructor() {
     this.messageInput = document.getElementById(
@@ -90,6 +106,10 @@ class ChatApp {
       await this.checkAuthentication();
       console.log("Authentication check completed successfully");
 
+      console.log("About to get current user info...");
+      // Get current user info including ID
+      await this.getCurrentUserInfo();
+
       console.log("About to load unified conversations...");
       // Load unified conversations list (includes friends and former friends)
       this.loadUnifiedConversations();
@@ -102,10 +122,6 @@ class ChatApp {
       console.log("About to set user info...");
       // Set user info
       this.setUserInfo();
-
-      console.log("About to setup auto refresh...");
-      // Set up automatic refresh every 30 seconds
-      this.setupAutoRefresh();
 
       console.log("=== Chat initialization completed successfully ===");
     } catch (error) {
@@ -163,6 +179,26 @@ class ChatApp {
       // Don't clear token on network errors - just log the error
       // This prevents losing authentication due to temporary network issues
       console.log("Network error during auth check, keeping token");
+    }
+  }
+
+  private async getCurrentUserInfo(): Promise<void> {
+    try {
+      const response = await fetch("/api/user/me", {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        this.currentUserId = userData.id;
+        console.log("Current user ID:", this.currentUserId);
+      } else {
+        console.error("Failed to get current user info");
+      }
+    } catch (error) {
+      console.error("Error getting current user info:", error);
     }
   }
 
@@ -234,6 +270,9 @@ class ChatApp {
         console.log(`Added conversation element ${index}`);
       }
     });
+
+    // Update typing indicators for all conversations
+    this.updateConversationTypingIndicators();
   }
 
   private createUnifiedConversationElement(conversation: any): HTMLElement {
@@ -270,15 +309,20 @@ class ChatApp {
       const diffInHours =
         (now.getTime() - lastMessageTime.getTime()) / (1000 * 60 * 60);
 
+      // Check if the last message is from the current user
+      const isOwnMessage =
+        this.currentUserId === conversation.last_message_sender;
+      const messagePrefix = isOwnMessage ? "You: " : "";
+
       if (diffInHours < 24) {
-        lastMessage.textContent = `${
+        lastMessage.textContent = `${messagePrefix}${
           conversation.last_message_text
         } • ${lastMessageTime.toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
         })}`;
       } else {
-        lastMessage.textContent = `${
+        lastMessage.textContent = `${messagePrefix}${
           conversation.last_message_text
         } • ${lastMessageTime.toLocaleDateString()}`;
       }
@@ -300,6 +344,9 @@ class ChatApp {
       // You could enhance this by checking friendship status
       statusIndicator.className = "w-2 h-2 bg-green-500 rounded-full";
     }
+
+    // Add data attribute for finding this conversation later
+    element.setAttribute("data-username", conversation.username);
 
     // Add click handler for conversation selection
     element.addEventListener("click", () => {
@@ -544,6 +591,8 @@ class ChatApp {
             text: messageData.message_text,
             timestamp: messageData.timestamp,
             sender: messageData.sender_username,
+            messageId: messageData.message_id || `msg_${Date.now()}`,
+            isRead: false,
           };
 
           // Add to conversation if it's from the currently selected friend
@@ -567,13 +616,49 @@ class ChatApp {
             this.messagesContainer.appendChild(messageElement);
             this.messagesContainer.scrollTop =
               this.messagesContainer.scrollHeight;
+
+            // Clear typing indicator since message was sent
+            this.clearTypingIndicator(messageData.sender_username);
+            // Also clear typing indicator in conversations list
+            this.updateConversationTypingIndicator(
+              messageData.sender_username,
+              false
+            );
+
+            // Send read receipt
+            this.sendReadReceipt(messageData.message_id || message.messageId);
           } else {
             // Message from someone else - update unread count
             this.updateUnreadCountForFriend(messageData.sender_username);
           }
+
+          // Always refresh the conversations list to show new messages in real-time
+          this.loadUnifiedConversations();
         } else if (messageData.type === "message_sent") {
           // This is a confirmation that our message was sent
           console.log("Message sent successfully:", messageData);
+
+          // Add message to local conversation with pending read receipt
+          if (this.selectedFriend && messageData.message_id) {
+            this.pendingReadReceipts.add(messageData.message_id);
+          }
+        } else if (messageData.type === "typing_indicator") {
+          // Handle typing indicator
+          this.handleTypingIndicator(messageData);
+        } else if (messageData.type === "read_receipt") {
+          // Handle read receipt
+          this.handleReadReceipt(messageData);
+        } else if (messageData.type === "connection_established") {
+          console.log(
+            "WebSocket connection established for user:",
+            messageData.username
+          );
+        } else if (messageData.type === "notification_update") {
+          // Handle notification updates (like new messages from other users)
+          if (messageData.notification_type === "new_message") {
+            // Refresh conversations list to show new message previews
+            this.loadUnifiedConversations();
+          }
         }
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
@@ -614,14 +699,55 @@ class ChatApp {
     const timestamp = element.querySelector("span:last-of-type") as HTMLElement;
     const messageText = element.querySelector("p") as HTMLElement;
 
-    if (avatar)
-      avatar.textContent = messageData.sender?.charAt(0)?.toUpperCase() || "?";
-    if (username) username.textContent = messageData.sender || "Unknown";
+    // Check if this is the current user's message
+    // We need to get the sender ID from the message data or check by username
+    const currentUsername = localStorage.getItem("username");
+    const isOwnMessage =
+      messageData.sender === currentUsername ||
+      messageData.sender_id === this.currentUserId;
+
+    if (avatar) {
+      if (isOwnMessage) {
+        avatar.textContent = "Y"; // "You"
+      } else {
+        avatar.textContent =
+          messageData.sender?.charAt(0)?.toUpperCase() || "?";
+      }
+    }
+
+    if (username) {
+      if (isOwnMessage) {
+        username.textContent = "You";
+      } else {
+        username.textContent = messageData.sender || "Unknown";
+      }
+    }
+
     if (timestamp)
       timestamp.textContent = new Date(
         messageData.timestamp
       ).toLocaleTimeString();
     if (messageText) messageText.textContent = messageData.text || messageData;
+
+    // Add message ID for read receipts
+    if (messageData.messageId) {
+      element.setAttribute("data-message-id", messageData.messageId);
+    }
+
+    // Add read receipt indicator
+    if (messageData.sender === localStorage.getItem("username")) {
+      const readIcon = document.createElement("span");
+      readIcon.className = `read-icon text-gray-400 text-xs ml-2 ${
+        messageData.isRead ? "text-blue-500" : ""
+      }`;
+      readIcon.innerHTML = messageData.isRead ? "✓✓" : "✓";
+      readIcon.title = messageData.isRead ? "Read" : "Delivered";
+
+      // Add to timestamp area
+      if (timestamp) {
+        timestamp.appendChild(readIcon);
+      }
+    }
 
     return element;
   }
@@ -689,6 +815,21 @@ class ChatApp {
       }
     });
 
+    // Add typing indicator on input
+    this.messageInput.addEventListener("input", () => {
+      this.sendTypingIndicator(true);
+
+      // Clear previous timeout
+      if (this.typingTimeout) {
+        clearTimeout(this.typingTimeout);
+      }
+
+      // Set timeout to stop typing indicator after 3 seconds of no input
+      this.typingTimeout = setTimeout(() => {
+        this.sendTypingIndicator(false);
+      }, 3000);
+    });
+
     // Add refresh button listeners
     this.refreshConversationsButton = document.getElementById(
       "refreshConversationsButton"
@@ -700,24 +841,157 @@ class ChatApp {
     }
   }
 
-  private setupAutoRefresh(): void {
-    // Set up automatic refresh every 30 seconds
-    this.refreshInterval = setInterval(() => {
-      this.loadUnifiedConversations();
-    }, 30000); // Refresh every 30 seconds
+  // Typing indicator methods
+  private sendTypingIndicator(isTyping: boolean): void {
+    if (!this.ws || !this.selectedFriend) return;
 
-    // Also refresh when the page becomes visible
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) {
-        this.loadUnifiedConversations();
-      }
-    });
+    const typingData = {
+      type: "typing_indicator",
+      recipient: this.selectedFriend.username,
+      isTyping: isTyping,
+    };
+
+    this.ws.send(JSON.stringify(typingData));
   }
 
-  private cleanup(): void {
-    if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
-      this.refreshInterval = null;
+  private handleTypingIndicator(data: any): void {
+    // Don't show typing indicator for ourselves
+    if (data.username === localStorage.getItem("username")) {
+      return;
+    }
+
+    // Show typing indicator in the conversations list
+    this.updateConversationTypingIndicator(data.username, data.isTyping);
+
+    // Only show typing indicator in chat if it's from the currently selected friend
+    if (
+      !this.selectedFriend ||
+      data.username !== this.selectedFriend.username
+    ) {
+      return;
+    }
+
+    if (data.isTyping) {
+      this.showTypingIndicator(data.username);
+    } else {
+      this.hideTypingIndicator(data.username);
+    }
+  }
+
+  private showTypingIndicator(username: string): void {
+    // Create or update typing indicator
+    let typingElement = document.getElementById("typingIndicator");
+    if (!typingElement) {
+      typingElement = document.createElement("div");
+      typingElement.id = "typingIndicator";
+      typingElement.className =
+        "flex items-center space-x-2 text-gray-500 text-sm italic p-2";
+      typingElement.innerHTML = `
+        <div class="flex space-x-1">
+          <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+          <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+          <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+        </div>
+        <span>${username} is typing...</span>
+      `;
+
+      if (this.messagesContainer) {
+        this.messagesContainer.appendChild(typingElement);
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+      }
+    }
+  }
+
+  private hideTypingIndicator(username: string): void {
+    const typingElement = document.getElementById("typingIndicator");
+    if (typingElement) {
+      typingElement.remove();
+    }
+  }
+
+  private clearTypingIndicator(username: string): void {
+    this.hideTypingIndicator(username);
+  }
+
+  // Read receipt methods
+  private sendReadReceipt(messageId: string): void {
+    if (!this.ws) return;
+
+    const readReceipt = {
+      type: "read_receipt",
+      message_id: messageId,
+    };
+
+    this.ws.send(JSON.stringify(readReceipt));
+  }
+
+  private handleReadReceipt(data: any): void {
+    // Update message read status in UI
+    const messageElement = document.querySelector(
+      `[data-message-id="${data.message_id}"]`
+    );
+    if (messageElement) {
+      const readIcon = messageElement.querySelector(".read-icon");
+      if (readIcon) {
+        readIcon.innerHTML = "✓✓"; // Double check for read
+        readIcon.className = "read-icon text-blue-500 text-xs";
+      }
+    }
+  }
+
+  private clearMessageNotifications(): void {
+    // Clear message notifications in navigation
+    document.dispatchEvent(new CustomEvent("clearMessageNotifications"));
+  }
+
+  // Conversation typing indicator methods
+  private updateConversationTypingIndicators(): void {
+    // Clear all existing typing indicators
+    const typingElements = document.querySelectorAll(
+      ".conversation-typing-indicator"
+    );
+    typingElements.forEach((el) => el.remove());
+  }
+
+  private updateConversationTypingIndicator(
+    username: string,
+    isTyping: boolean
+  ): void {
+    // Find the conversation element for this user
+    const conversationElement = document.querySelector(
+      `[data-username="${username}"]`
+    );
+    if (!conversationElement) return;
+
+    // Remove existing typing indicator
+    const existingIndicator = conversationElement.querySelector(
+      ".conversation-typing-indicator"
+    );
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+
+    if (isTyping) {
+      // Create and add typing indicator
+      const typingIndicator = document.createElement("div");
+      typingIndicator.className =
+        "conversation-typing-indicator flex items-center space-x-1 text-gray-500 text-xs italic ml-2";
+      typingIndicator.innerHTML = `
+        <div class="flex space-x-1">
+          <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div>
+          <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+          <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+        </div>
+        <span class="ml-1">typing...</span>
+      `;
+
+      // Find the conversation info area to add the typing indicator
+      const conversationInfo = conversationElement.querySelector(
+        ".conversation-last-message"
+      );
+      if (conversationInfo) {
+        conversationInfo.appendChild(typingIndicator);
+      }
     }
   }
 }
