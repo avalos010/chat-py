@@ -198,5 +198,9 @@ content %}
 </template>
 
 {% endblock %} {% block scripts %}
+<script>
+  // Pass conversation_id from backend to frontend if available
+  window.initialConversationId = "{{ conversation_id or '' }}";
+</script>
 <script src="/static/js/chat.js"></script>
 {% endblock %}

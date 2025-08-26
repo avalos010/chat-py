@@ -19,6 +19,7 @@ interface Friend {
   friend_id: number;
   username: string;
   email: string;
+  status?: "online" | "offline";
 }
 
 class FriendsManager {
@@ -488,6 +489,9 @@ class FriendsManager {
       if (response.ok) {
         const data = await response.json();
         this.displayFriendsList(data.friends);
+
+        // Load online status for all friends
+        await this.loadFriendsOnlineStatus();
       } else {
         console.error("Failed to load friends list");
         this.showNoFriends();
@@ -551,6 +555,18 @@ class FriendsManager {
     if (avatar) avatar.textContent = friend.username.charAt(0).toUpperCase();
     if (username) username.textContent = friend.username;
     if (email) email.textContent = friend.email;
+
+    // Add online status indicator
+    const statusIndicator = element.querySelector(
+      ".status-indicator"
+    ) as HTMLElement;
+    if (statusIndicator) {
+      const status = friend.status || "offline";
+      statusIndicator.className = `status-indicator w-3 h-3 rounded-full ${
+        status === "online" ? "bg-green-500" : "bg-gray-400"
+      }`;
+      statusIndicator.title = `${friend.username} is ${status}`;
+    }
 
     // Setup remove friend button
     const removeButton = element.querySelector(
@@ -839,17 +855,19 @@ class FriendsManager {
   }
 
   private updateUserStatus(userId: number, status: string): void {
-    // Update status indicators in the UI
+    // Update status indicators in the UI for friends list
     const statusElements = document.querySelectorAll(
-      `[data-user-id="${userId}"] .status-indicator`
+      `[data-friend-id="${userId}"] .status-indicator`
     );
     statusElements.forEach((element) => {
       const statusElement = element as HTMLElement;
       if (status === "online") {
-        statusElement.className = "w-2 h-2 bg-green-500 rounded-full";
+        statusElement.className =
+          "status-indicator w-3 h-3 rounded-full bg-green-500";
         statusElement.title = "Online";
       } else {
-        statusElement.className = "w-2 h-2 bg-gray-400 rounded-full";
+        statusElement.className =
+          "status-indicator w-3 h-3 rounded-full bg-gray-400";
         statusElement.title = "Offline";
       }
     });
@@ -878,6 +896,26 @@ class FriendsManager {
         }
       }, 300);
     }, 5000);
+  }
+
+  private async loadFriendsOnlineStatus(): Promise<void> {
+    try {
+      const response = await fetch("/api/friends/online-status", {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update status indicators for each friend
+        data.friends_status.forEach((friendStatus: any) => {
+          this.updateUserStatus(friendStatus.friend_id, friendStatus.status);
+        });
+      }
+    } catch (error) {
+      console.error("Error loading friends online status:", error);
+    }
   }
 }
 

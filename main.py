@@ -45,8 +45,8 @@ async def on_startup():
 async def on_shutdown():
     print("shutting down!")
     await db.close()
-# Store active connections
-connections: List[WebSocket] = []
+# Store active connections with user info
+connections: List[dict] = []
 
 # In-memory storage for messages
 messages_list: dict[int, MsgPayload] = {}
@@ -124,6 +124,46 @@ async def chat_route(request: Request):
         "request": request,
         "active_users": len(connections),
         "user": user
+    })
+
+@app.get("/chat/{conversation_id}")
+async def chat_conversation_route(request: Request, conversation_id: str):
+    """Serve the chat page template for a specific conversation - requires authentication"""
+    # First try to get user from middleware (for API requests with headers)
+    user = getattr(request.state, 'user', None)
+    
+    # If no user from middleware, check for token in query params (for browser navigation)
+    if not user:
+        token = request.query_params.get("token")
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                username = payload.get("sub")
+                if username:
+                    user = await get_user(db, username)
+            except JWTError:
+                pass
+    
+    # If still no user, check for token in cookies as fallback
+    if not user:
+        token = request.cookies.get("auth_token")
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                username = payload.get("sub")
+                if username:
+                    user = await get_user(db, username)
+            except JWTError:
+                pass
+    
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    return templates.TemplateResponse("chat.html", {
+        "request": request,
+        "active_users": len(connections),
+        "user": user,
+        "conversation_id": conversation_id
     })
 
 @app.get("/login")
@@ -337,6 +377,29 @@ async def get_current_user_info(request: Request):
         "username": user.username,
         "email": user.email
     }
+
+
+@app.get("/api/friends/online-status")
+async def get_friends_online_status(request: Request):
+    """Get online status of all friends"""
+    user = await get_current_user_from_request(request)
+    
+    # Get user's friends list
+    friends = await db.get_friends_list(user.id)
+    
+    # Get online status for each friend
+    online_status = []
+    for friend in friends:
+        friend_id = friend["friend_id"]
+        is_online = any(conn["user_id"] == friend_id for conn in connections)
+        
+        online_status.append({
+            "friend_id": friend_id,
+            "username": friend["username"],
+            "status": "online" if is_online else "offline"
+        })
+    
+    return {"friends_status": online_status}
 
 
 @app.post("/api/friend-request/send")

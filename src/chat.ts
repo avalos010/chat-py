@@ -127,6 +127,17 @@ class ChatApp {
       // Check if there's a conversation ID in the URL and restore it
       this.handleUrlBasedNavigation();
 
+      // Check if there's an initial conversation ID from the backend
+      if ((window as any).initialConversationId) {
+        console.log(
+          "Initial conversation ID found:",
+          (window as any).initialConversationId
+        );
+        await this.selectConversationById(
+          (window as any).initialConversationId
+        );
+      }
+
       console.log("=== Chat initialization completed successfully ===");
     } catch (error) {
       console.error("Chat initialization failed:", error);
@@ -277,6 +288,9 @@ class ChatApp {
 
     // Update typing indicators for all conversations
     this.updateConversationTypingIndicators();
+
+    // Load online status for all conversations
+    this.loadConversationsOnlineStatus();
   }
 
   private createUnifiedConversationElement(conversation: any): HTMLElement {
@@ -344,9 +358,9 @@ class ChatApp {
 
     // Set status indicator (online/offline based on friendship)
     if (statusIndicator) {
-      // For now, assume all conversations are with current friends
-      // You could enhance this by checking friendship status
-      statusIndicator.className = "w-2 h-2 bg-green-500 rounded-full";
+      // Set initial status - will be updated by real-time updates
+      statusIndicator.className = "w-2 h-2 bg-gray-400 rounded-full";
+      statusIndicator.setAttribute("data-username", conversation.username);
     }
 
     // Add data attribute for finding this conversation later
@@ -393,9 +407,17 @@ class ChatApp {
       this.selectedFriendNameElement.textContent = this.selectedFriend.username;
     }
     if (this.selectedFriendStatusElement) {
-      this.selectedFriendStatusElement.textContent = "● Online";
-      this.selectedFriendStatusElement.className = "text-sm text-green-600";
+      const status = this.selectedFriend.status || "offline";
+      const statusText = status === "online" ? "● Online" : "○ Offline";
+      const statusColor =
+        status === "online" ? "text-green-600" : "text-gray-500";
+
+      this.selectedFriendStatusElement.textContent = statusText;
+      this.selectedFriendStatusElement.className = `text-sm ${statusColor}`;
     }
+
+    // Load current online status for this friend
+    this.loadFriendCurrentStatus(this.selectedFriend.username);
 
     // Load conversation history for this friend
     if (this.selectedFriend) {
@@ -697,6 +719,12 @@ class ChatApp {
               this.loadUnifiedConversations();
             }
           }
+        } else if (messageData.type === "user_status_update") {
+          // Handle user online/offline status updates
+          this.updateConversationStatus(
+            messageData.username,
+            messageData.status
+          );
         }
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
@@ -1095,6 +1123,125 @@ class ChatApp {
         detail: { conversationId },
       })
     );
+  }
+
+  // Update conversation status in the conversations list
+  private updateConversationStatus(username: string, status: string): void {
+    const statusElements = document.querySelectorAll(
+      `[data-username="${username}"] .status-indicator`
+    );
+
+    statusElements.forEach((element) => {
+      const statusElement = element as HTMLElement;
+      if (status === "online") {
+        statusElement.className = "w-2 h-2 bg-green-500 rounded-full";
+        statusElement.title = `${username} is online`;
+      } else {
+        statusElement.className = "w-2 h-2 bg-gray-400 rounded-full";
+        statusElement.title = `${username} is offline`;
+      }
+    });
+
+    // Also update the selected friend's status if this is the current friend
+    if (this.selectedFriend && this.selectedFriend.username === username) {
+      this.updateSelectedFriendStatus(status);
+    }
+  }
+
+  // Load online status for all conversations
+  private async loadConversationsOnlineStatus(): Promise<void> {
+    try {
+      const response = await fetch("/api/friends/online-status", {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update status indicators for each friend
+        data.friends_status.forEach((friendStatus: any) => {
+          this.updateConversationStatus(
+            friendStatus.username,
+            friendStatus.status
+          );
+        });
+      }
+    } catch (error) {
+      console.error("Error loading conversations online status:", error);
+    }
+  }
+
+  // Select conversation by conversation ID
+  private async selectConversationById(conversationId: string): Promise<void> {
+    try {
+      // Load conversations first to make sure we have the data
+      await this.loadUnifiedConversations();
+
+      // Find the conversation with this ID
+      const response = await fetch("/api/recent-conversations", {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const conversation = data.conversations.find(
+          (conv: any) => conv.conversation_id === conversationId
+        );
+
+        if (conversation) {
+          // Select this conversation
+          this.selectUnifiedConversation(conversation);
+        } else {
+          console.log("Conversation not found:", conversationId);
+        }
+      }
+    } catch (error) {
+      console.error("Error selecting conversation by ID:", error);
+    }
+  }
+
+  // Update the selected friend's status in the chat header
+  private updateSelectedFriendStatus(status: string): void {
+    if (!this.selectedFriendStatusElement) return;
+
+    const statusText = status === "online" ? "● Online" : "○ Offline";
+    const statusColor =
+      status === "online" ? "text-green-600" : "text-gray-500";
+
+    this.selectedFriendStatusElement.textContent = statusText;
+    this.selectedFriendStatusElement.className = `text-sm ${statusColor}`;
+
+    // Also update the friend object status
+    if (this.selectedFriend) {
+      this.selectedFriend.status = status as "online" | "offline";
+    }
+  }
+
+  // Load current online status for a specific friend
+  private async loadFriendCurrentStatus(username: string): Promise<void> {
+    try {
+      const response = await fetch("/api/friends/online-status", {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const friendStatus = data.friends_status.find(
+          (fs: any) => fs.username === username
+        );
+        
+        if (friendStatus) {
+          this.updateConversationStatus(username, friendStatus.status);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading friend current status:", error);
+    }
   }
 }
 
