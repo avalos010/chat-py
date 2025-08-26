@@ -14,6 +14,7 @@ interface TypingIndicator {
 
 interface Friend {
   friend_id: number;
+  conversation_id: string;
   username: string;
   email: string;
   status?: "online" | "offline";
@@ -122,6 +123,9 @@ class ChatApp {
       console.log("About to set user info...");
       // Set user info
       this.setUserInfo();
+
+      // Check if there's a conversation ID in the URL and restore it
+      this.handleUrlBasedNavigation();
 
       console.log("=== Chat initialization completed successfully ===");
     } catch (error) {
@@ -359,11 +363,20 @@ class ChatApp {
   private selectUnifiedConversation(conversation: any): void {
     this.selectedFriend = {
       friend_id: conversation.user_id,
+      conversation_id: conversation.conversation_id,
       username: conversation.username,
       email: conversation.email || "",
       status: "online",
       unread_count: conversation.unread_count || 0,
     };
+
+    // Update URL to include conversation ID
+    const newUrl = `/chat/${conversation.conversation_id}`;
+    window.history.pushState(
+      { conversationId: conversation.conversation_id },
+      "",
+      newUrl
+    );
 
     // Update UI to show selected friend
     if (this.noFriendSelectedElement && this.chatConversationElement) {
@@ -390,6 +403,9 @@ class ChatApp {
 
       // Mark messages as read
       this.markMessagesAsRead(this.selectedFriend.friend_id);
+
+      // Clear notifications for this conversation since it's now open
+      this.clearConversationNotifications(this.selectedFriend.conversation_id);
     }
 
     // Focus on message input
@@ -409,6 +425,20 @@ class ChatApp {
 
     this.conversationsLoading.classList.add("hidden");
     this.noConversations.classList.remove("hidden");
+  }
+
+  // Clear conversation selection and update URL
+  private clearConversationSelection(): void {
+    this.selectedFriend = null;
+
+    // Update URL to just /chat
+    window.history.pushState({}, "", "/chat");
+
+    // Show no friend selected state
+    if (this.noFriendSelectedElement && this.chatConversationElement) {
+      this.noFriendSelectedElement.classList.remove("hidden");
+      this.chatConversationElement.classList.add("hidden");
+    }
   }
 
   private async markMessagesAsRead(friendId: number): Promise<void> {
@@ -656,8 +686,16 @@ class ChatApp {
         } else if (messageData.type === "notification_update") {
           // Handle notification updates (like new messages from other users)
           if (messageData.notification_type === "new_message") {
-            // Refresh conversations list to show new message previews
-            this.loadUnifiedConversations();
+            // Check if this message is for the currently open conversation
+            const currentConversationId = this.getCurrentConversationId();
+            const isForOpenConversation =
+              currentConversationId &&
+              messageData.conversation_id === currentConversationId;
+
+            // Only refresh conversations list if the message isn't for the open conversation
+            if (!isForOpenConversation) {
+              this.loadUnifiedConversations();
+            }
           }
         }
       } catch (error) {
@@ -839,6 +877,21 @@ class ChatApp {
         this.loadUnifiedConversations();
       });
     }
+
+    // Handle browser back/forward navigation
+    window.addEventListener("popstate", (event) => {
+      if (event.state && event.state.conversationId) {
+        // Restore conversation from URL
+        this.handleUrlBasedNavigation();
+      } else {
+        // Clear selected conversation
+        this.selectedFriend = null;
+        if (this.noFriendSelectedElement && this.chatConversationElement) {
+          this.noFriendSelectedElement.classList.remove("hidden");
+          this.chatConversationElement.classList.add("hidden");
+        }
+      }
+    });
   }
 
   // Typing indicator methods
@@ -993,6 +1046,55 @@ class ChatApp {
         conversationInfo.appendChild(typingIndicator);
       }
     }
+  }
+
+  // Check if a conversation is currently open
+  private isConversationOpen(conversationId: string): boolean {
+    return this.selectedFriend?.conversation_id === conversationId;
+  }
+
+  // Check if current URL has a conversation ID
+  private getCurrentConversationId(): string | null {
+    const pathParts = window.location.pathname.split("/");
+    if (pathParts.length >= 3 && pathParts[1] === "chat") {
+      return pathParts[2]; // Return the conversation ID as string (UUID)
+    }
+    return null;
+  }
+
+  // Handle URL-based navigation to restore conversation state
+  private async handleUrlBasedNavigation(): Promise<void> {
+    const conversationId = this.getCurrentConversationId();
+    if (conversationId) {
+      // Try to find the conversation in the loaded conversations
+      const response = await fetch("/api/recent-conversations", {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const conversation = data.conversations.find(
+          (conv: any) => conv.conversation_id === conversationId
+        );
+
+        if (conversation) {
+          // Restore the conversation
+          this.selectUnifiedConversation(conversation);
+        }
+      }
+    }
+  }
+
+  // Clear notifications for a specific conversation
+  private clearConversationNotifications(conversationId: string): void {
+    // Dispatch event to clear navigation notifications
+    document.dispatchEvent(
+      new CustomEvent("clearConversationNotifications", {
+        detail: { conversationId },
+      })
+    );
   }
 }
 

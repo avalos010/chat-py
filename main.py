@@ -519,7 +519,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 continue
                             
                             # Save message to database
-                            await db.save_message(user.id, recipient_user.id, message_text)
+                            conversation_id = await db.save_message(user.id, recipient_user.id, message_text)
                             
                             # Create message object to send
                             message_to_send = {
@@ -530,7 +530,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "recipient_username": recipient_username,
                                 "message_text": message_text,
                                 "timestamp": datetime.now().isoformat(),
-                                "message_id": f"msg_{user.id}_{int(datetime.now().timestamp())}"
+                                "message_id": conversation_id,
+                                "conversation_id": conversation_id
                             }
                             
                             # Send to recipient if they're online
@@ -545,6 +546,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                             "notification_type": "new_message",
                                             "sender_username": user.username,
                                             "sender_id": user.id,
+                                            "recipient_id": recipient_user.id,
+                                            "conversation_id": conversation_id,
                                             "message_preview": message_text[:50] + "..." if len(message_text) > 50 else message_text,
                                             "timestamp": message_to_send["timestamp"]
                                         }))

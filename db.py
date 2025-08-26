@@ -1,4 +1,5 @@
 import aiosqlite
+import uuid
 
 import os
 from dotenv import load_dotenv
@@ -45,6 +46,7 @@ class Database:
         await self.conn.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY,
+                conversation_id TEXT NOT NULL,
                 sender_id INTEGER NOT NULL,
                 recipient_id INTEGER NOT NULL,
                 message_text TEXT NOT NULL,
@@ -53,6 +55,12 @@ class Database:
                 FOREIGN KEY (sender_id) REFERENCES users (id),
                 FOREIGN KEY (recipient_id) REFERENCES users (id)
             )
+        """)
+        
+        # Create index on conversation_id for better performance
+        await self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_messages_conversation_id 
+            ON messages (conversation_id)
         """)
         
         await self.commit()
@@ -364,6 +372,7 @@ class Database:
                             WHEN m.sender_id = ? THEN m.recipient_id
                             ELSE m.sender_id
                         END as other_user_id,
+                        m.conversation_id,
                         m.message_text,
                         m.timestamp,
                         m.sender_id,
@@ -383,6 +392,7 @@ class Database:
                     rm.other_user_id,
                     u.username,
                     u.email,
+                    rm.conversation_id,
                     rm.timestamp as last_message_time,
                     rm.message_text as last_message_text,
                     rm.sender_id as last_message_sender,
@@ -404,10 +414,11 @@ class Database:
                     "user_id": row[0],
                     "username": row[1],
                     "email": row[2],
-                    "last_message_time": row[3],
-                    "last_message_text": row[4] or "No messages yet",
-                    "last_message_sender": row[5],
-                    "unread_count": row[6]
+                    "conversation_id": row[3],
+                    "last_message_time": row[4],
+                    "last_message_text": row[5] or "No messages yet",
+                    "last_message_sender": row[6],
+                    "unread_count": row[7]
                 }
                 for row in rows
             ]
@@ -418,12 +429,17 @@ class Database:
     async def save_message(self, sender_id: int, recipient_id: int, message_text: str):
         """Save a new message to the database"""
         try:
+            # Generate a unique conversation ID based on the two users
+            # Sort the IDs to ensure consistent conversation ID regardless of who sends first
+            user_ids = sorted([sender_id, recipient_id])
+            conversation_id = f"conv_{user_ids[0]}_{user_ids[1]}"
+            
             await self.conn.execute(
-                "INSERT INTO messages (sender_id, recipient_id, message_text) VALUES (?, ?, ?)",
-                (sender_id, recipient_id, message_text)
+                "INSERT INTO messages (conversation_id, sender_id, recipient_id, message_text) VALUES (?, ?, ?, ?)",
+                (conversation_id, sender_id, recipient_id, message_text)
             )
             await self.commit()
-            return True
+            return conversation_id
         except Exception as e:
             print(f"Error saving message: {e}")
             return False

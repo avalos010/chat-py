@@ -7,6 +7,8 @@ interface NotificationData {
   notification_type?: string;
   sender_username?: string;
   sender_id?: number;
+  recipient_id?: number;
+  conversation_id?: string;
   message_preview?: string;
   timestamp: string;
   // Friend request specific fields
@@ -79,6 +81,15 @@ class NavigationManager {
     document.addEventListener("authStateChanged", () => {
       this.updateNavigation();
     });
+
+    // Listen for conversation notification clearing
+    document.addEventListener(
+      "clearConversationNotifications",
+      (event: any) => {
+        const { conversationId } = event.detail;
+        this.clearConversationNotifications(conversationId);
+      }
+    );
   }
 
   private updateNavigation(): void {
@@ -211,11 +222,25 @@ class NavigationManager {
     switch (data.type) {
       case "notification_update":
         if (data.notification_type === "new_message") {
-          this.notificationCounts.messages++;
-          this.updateChatNotificationBadge();
-          this.showToastNotification(
-            `New message from ${data.sender_username}: ${data.message_preview}`
-          );
+          // Check if this message is for the currently open conversation
+          const currentPath = window.location.pathname;
+          const isInChat = currentPath.startsWith("/chat/");
+          const currentConversationId = isInChat
+            ? currentPath.split("/")[2]
+            : null;
+
+          const isForOpenConversation =
+            currentConversationId &&
+            data.conversation_id === currentConversationId;
+
+          // Only show notifications if the conversation isn't currently open
+          if (!isForOpenConversation) {
+            this.notificationCounts.messages++;
+            this.updateChatNotificationBadge();
+            this.showToastNotification(
+              `New message from ${data.sender_username}: ${data.message_preview}`
+            );
+          }
         }
         break;
 
@@ -349,6 +374,16 @@ class NavigationManager {
   // Public method to trigger navigation update
   public refresh(): void {
     this.updateNavigation();
+  }
+
+  // Clear notifications for a specific conversation
+  private clearConversationNotifications(conversationId: string): void {
+    // Clear message notifications for this conversation
+    this.notificationCounts.messages = Math.max(
+      0,
+      this.notificationCounts.messages - 1
+    );
+    this.updateChatNotificationBadge();
   }
 }
 
