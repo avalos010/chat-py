@@ -1,6 +1,6 @@
 from codecs import encode
 from typing_extensions import Annotated
-from fastapi import Body, FastAPI, WebSocket, Depends, HTTPException, status, Request
+from fastapi import Body, FastAPI, WebSocket, Depends, HTTPException, status, Request, Response
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -74,6 +74,41 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
     user = await get_user(db, username)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
+    return user
+
+async def get_current_user_from_cookie(request: Request):
+    """Get current user from secure HttpOnly cookie"""
+    token = request.cookies.get("auth_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user = await get_user(db, username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 async def get_current_user_from_request(request: Request):
@@ -171,14 +206,26 @@ async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
-async def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login_user(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     if not await db.verify_password(form_data.username, form_data.password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
+    
     # Generate a JWT token
     expires_delta = timedelta(minutes=30)  # 30 minutes
     expire = datetime.utcnow() + expires_delta
-    token = jwt.encode({"sub": form_data.username, "exp": expire}, SECRET_KEY, algorithm="HS256")
-    return {"access_token": token, "token_type": "bearer"}
+    access_token = jwt.encode({"sub": form_data.username, "exp": expire}, SECRET_KEY, algorithm="HS256")
+    
+    # Set a secure, HttpOnly cookie instead of returning the token
+    response.set_cookie(
+        key="auth_token",
+        value=access_token,
+        httponly=True,
+        samesite="strict",
+        secure=False,  # Set to True in production with HTTPS
+        max_age=1800  # 30 minutes in seconds
+    )
+    
+    return {"redirect_url": "/chat"}
 
 
 @app.get("/signup")
@@ -516,10 +563,27 @@ def message_items() -> dict[str, dict[int, MsgPayload]]:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     try:
-        # Get token from query parameters or headers
-        token = websocket.query_params.get("token") or websocket.headers.get("authorization", "").replace("Bearer ", "")
+        # Get token from query parameters (preferred for WebSocket) or headers/cookies
+        token = websocket.query_params.get("token")
+        
+        # If no token in query params, try Authorization header
+        if not token:
+            auth_header = websocket.headers.get("authorization", "")
+            if auth_header:
+                token = auth_header.replace("Bearer ", "")
+        
+        # If no token in header, try to get from cookie header
+        if not token:
+            cookie_header = websocket.headers.get("cookie", "")
+            if cookie_header:
+                # Parse cookies manually
+                for cookie in cookie_header.split(";"):
+                    if "auth_token=" in cookie:
+                        token = cookie.split("=")[1].strip()
+                        break
         
         if not token:
+            print("WebSocket: No token found in query params, headers, or cookies")
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
             
@@ -782,15 +846,22 @@ async def verify_token(request: Request, call_next):
     print("Middleware executed")
     print(f"Request path: {request.url.path}")
     print(f"Authorization header: {request.headers.get('Authorization')}")
+    print(f"Cookies: {request.cookies}")
+    
     try:
+        # First try to get token from Authorization header
         token = request.headers.get("Authorization")
+        if token:
+            token = token.replace("Bearer ", "")  # Remove the Bearer prefix
+        else:
+            # Fallback to cookie-based authentication
+            token = request.cookies.get("auth_token")
+        
         if not token:
             # Set a default user for unauthenticated requests
             request.state.user = None
-            print("No Authorization header found")
+            print("No token found in headers or cookies")
             return await call_next(request)
-        
-        token = token.replace("Bearer ", "")  # Remove the Bearer prefix
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             username = payload.get("sub")
@@ -814,3 +885,32 @@ async def verify_token(request: Request, call_next):
         request.state.user = None
     
     return await call_next(request)
+
+@app.post("/logout")
+async def logout_user(response: Response):
+    """Logout user by clearing the auth cookie"""
+    response.delete_cookie(
+        key="auth_token",
+        httponly=True,
+        samesite="strict",
+        secure=False  # Set to True in production with HTTPS
+    )
+    return {"message": "Logged out successfully"}
+
+@app.get("/api/ws-token")
+async def get_ws_token(request: Request):
+    """Get a token for WebSocket authentication"""
+    # Get user from cookie authentication
+    user = getattr(request.state, 'user', None)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
+    
+    # Generate a JWT token for WebSocket authentication
+    expires_delta = timedelta(minutes=30)
+    expire = datetime.utcnow() + expires_delta
+    access_token = jwt.encode({"sub": user.username, "exp": expire}, SECRET_KEY, algorithm="HS256")
+    
+    return {"token": access_token}

@@ -32,7 +32,6 @@ class ChatApp {
   private conversationsLoading: HTMLElement | null = null;
   private connectionStatusElement: HTMLSpanElement | null;
   private userInfoElement: HTMLSpanElement | null;
-  private token: string | null = null;
 
   // New elements for messenger interface
   private noFriendSelectedElement: HTMLElement | null;
@@ -46,7 +45,7 @@ class ChatApp {
   private refreshConversationsButton: HTMLButtonElement | null = null;
 
   // Typing indicator and read receipt system
-  private typingIndicators: Map<number, TypingIndicator> = new Map();
+  private typingIndicators: Map<string, TypingIndicator> = new Map();
   private typingTimeout: NodeJS.Timeout | null = null;
   private lastTypingTime: number = 0;
   private pendingReadReceipts: Set<string> = new Set();
@@ -69,7 +68,7 @@ class ChatApp {
     ) as HTMLDivElement;
     this.conversationsList = document.getElementById(
       "conversationsList"
-    ) as HTMLDivElement;
+    ) as HTMLElement;
     this.noConversations = document.getElementById("noConversations");
     this.conversationsLoading = document.getElementById("conversationsLoading");
     this.connectionStatusElement = document.getElementById(
@@ -95,115 +94,38 @@ class ChatApp {
       throw new Error("Required DOM elements not found");
     }
 
-    this.token = localStorage.getItem("token");
     this.initialize();
   }
 
   private async initialize(): Promise<void> {
-    console.log("=== Chat initialization started ===");
-    try {
-      console.log("About to check authentication...");
-      // Check authentication first
-      await this.checkAuthentication();
-      console.log("Authentication check completed successfully");
+    console.log("Initializing ChatApp...");
 
-      console.log("About to get current user info...");
-      // Get current user info including ID
-      await this.getCurrentUserInfo();
+    // Get current user info
+    await this.getCurrentUserInfo();
 
-      console.log("About to load unified conversations...");
-      // Load unified conversations list (includes friends and former friends)
-      this.loadUnifiedConversations();
+    // Load conversations
+    await this.loadUnifiedConversations();
 
-      console.log("About to initialize WebSocket...");
-      // Initialize WebSocket with authentication
-      this.initializeWebSocket();
-      this.addEventListeners();
+    // Setup event listeners
+    this.setupEventListeners();
 
-      console.log("About to set user info...");
-      // Set user info
-      this.setUserInfo();
+    // Initialize WebSocket
+    this.initializeWebSocket();
 
-      // Check if there's a conversation ID in the URL and restore it
-      this.handleUrlBasedNavigation();
-
-      // Check if there's an initial conversation ID from the backend
-      if ((window as any).initialConversationId) {
-        console.log(
-          "Initial conversation ID found:",
-          (window as any).initialConversationId
-        );
-        await this.selectConversationById(
-          (window as any).initialConversationId
-        );
-      }
-
-      console.log("=== Chat initialization completed successfully ===");
-    } catch (error) {
-      console.error("Chat initialization failed:", error);
-      // Don't redirect if there's an initialization error - just log it
-      // This prevents redirect loops
-    }
-  }
-
-  private async checkAuthentication(): Promise<void> {
-    console.log("=== checkAuthentication called ===");
-    const token = localStorage.getItem("token");
-    console.log("Token found:", !!token);
-    console.log("Current pathname:", window.location.pathname);
-
-    if (!token) {
-      console.log("No token found, checking if we need to redirect...");
-      // Only redirect if we're not already on the login page
-      if (window.location.pathname !== "/login") {
-        console.log("Redirecting to login...");
-        window.location.href = "/login";
-      } else {
-        console.log("Already on login page, no redirect needed");
-      }
-      return;
-    }
-
-    console.log("Token found, checking with server...");
-    try {
-      const response = await fetch("/check-auth", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+    // Setup refresh button
+    this.refreshConversationsButton = document.getElementById(
+      "refreshConversationsButton"
+    ) as HTMLButtonElement;
+    if (this.refreshConversationsButton) {
+      this.refreshConversationsButton.addEventListener("click", () => {
+        this.loadUnifiedConversations();
       });
-
-      console.log("Server response status:", response.status);
-      console.log("Server response ok:", response.ok);
-
-      if (!response.ok) {
-        console.log("Authentication check failed, clearing token");
-        localStorage.removeItem("token");
-        // Only redirect if we're not already on the login page
-        if (window.location.pathname !== "/login") {
-          console.log("Redirecting to login due to auth failure...");
-          window.location.href = "/login";
-        } else {
-          console.log("Already on login page, no redirect needed");
-        }
-        return;
-      }
-
-      console.log("Authentication check successful");
-    } catch (error) {
-      console.error("Authentication check failed:", error);
-      // Don't clear token on network errors - just log the error
-      // This prevents losing authentication due to temporary network issues
-      console.log("Network error during auth check, keeping token");
     }
   }
 
   private async getCurrentUserInfo(): Promise<void> {
     try {
-      const response = await fetch("/api/user/me", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
-      });
+      const response = await fetch("/api/user/me");
 
       if (response.ok) {
         const userData = await response.json();
@@ -220,11 +142,7 @@ class ChatApp {
   private async loadUnifiedConversations(): Promise<void> {
     try {
       console.log("Loading unified conversations...");
-      const response = await fetch("/api/recent-conversations", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
-      });
+      const response = await fetch("/api/recent-conversations");
 
       console.log("Response status:", response.status);
       if (response.ok) {
@@ -319,147 +237,92 @@ class ChatApp {
     if (avatar)
       avatar.textContent = conversation.username.charAt(0).toUpperCase();
     if (username) username.textContent = conversation.username;
-
     if (lastMessage) {
-      // Show last message text and time
-      const lastMessageTime = new Date(conversation.last_message_time);
-      const now = new Date();
-      const diffInHours =
-        (now.getTime() - lastMessageTime.getTime()) / (1000 * 60 * 60);
-
-      // Check if the last message is from the current user
-      const isOwnMessage =
-        this.currentUserId === conversation.last_message_sender;
-      const messagePrefix = isOwnMessage ? "You: " : "";
-
-      if (diffInHours < 24) {
-        lastMessage.textContent = `${messagePrefix}${
-          conversation.last_message_text
-        } • ${lastMessageTime.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}`;
-      } else {
-        lastMessage.textContent = `${messagePrefix}${
-          conversation.last_message_text
-        } • ${lastMessageTime.toLocaleDateString()}`;
-      }
+      lastMessage.textContent = conversation.last_message || "No messages yet";
     }
 
-    // Handle unread message count
+    // Set unread count
     if (
       unreadBadge &&
       conversation.unread_count &&
       conversation.unread_count > 0
     ) {
-      unreadBadge.textContent = conversation.unread_count.toString();
+      const unreadCount = unreadBadge.querySelector(
+        ".unread-count"
+      ) as HTMLElement;
+      if (unreadCount)
+        unreadCount.textContent = conversation.unread_count.toString();
       unreadBadge.classList.remove("hidden");
     }
 
-    // Set status indicator (online/offline based on friendship)
+    // Set online status
     if (statusIndicator) {
-      // Set initial status - will be updated by real-time updates
-      statusIndicator.className = "w-2 h-2 bg-gray-400 rounded-full";
-      statusIndicator.setAttribute("data-username", conversation.username);
+      if (conversation.status === "online") {
+        statusIndicator.classList.add("bg-green-500");
+        statusIndicator.classList.remove("bg-gray-400");
+      } else {
+        statusIndicator.classList.add("bg-gray-400");
+        statusIndicator.classList.remove("bg-green-500");
+      }
     }
 
-    // Add data attribute for finding this conversation later
-    element.setAttribute("data-username", conversation.username);
-
-    // Add click handler for conversation selection
+    // Add click event to select conversation
     element.addEventListener("click", () => {
-      this.selectUnifiedConversation(conversation);
+      if (conversation) {
+        this.selectConversation(conversation);
+      }
     });
 
     return element;
   }
 
-  private selectUnifiedConversation(conversation: any): void {
+  private selectConversation(conversation: any): void {
+    console.log("Selecting conversation:", conversation);
+
+    // Update selected friend
     this.selectedFriend = {
-      friend_id: conversation.user_id,
+      friend_id: conversation.friend_id,
       conversation_id: conversation.conversation_id,
       username: conversation.username,
-      email: conversation.email || "",
-      status: "online",
-      unread_count: conversation.unread_count || 0,
+      email: conversation.email,
+      status: conversation.status,
+      unread_count: conversation.unread_count,
     };
 
-    // Update URL to include conversation ID
-    const newUrl = `/chat/${conversation.conversation_id}`;
-    window.history.pushState(
-      { conversationId: conversation.conversation_id },
-      "",
-      newUrl
-    );
+    // Update UI
+    this.showChatConversation();
+    this.loadConversation(conversation.friend_id);
 
-    // Update UI to show selected friend
-    if (this.noFriendSelectedElement && this.chatConversationElement) {
+    // Mark messages as read
+    this.markMessagesAsRead(conversation.friend_id);
+  }
+
+  private showChatConversation(): void {
+    if (this.noFriendSelectedElement) {
       this.noFriendSelectedElement.classList.add("hidden");
+    }
+    if (this.chatConversationElement) {
       this.chatConversationElement.classList.remove("hidden");
     }
 
-    // Update friend info in chat header
-    if (this.selectedFriendAvatarElement && this.selectedFriend) {
-      this.selectedFriendAvatarElement.textContent =
-        this.selectedFriend.username.charAt(0).toUpperCase();
-    }
-    if (this.selectedFriendNameElement && this.selectedFriend) {
-      this.selectedFriendNameElement.textContent = this.selectedFriend.username;
-    }
-    if (this.selectedFriendStatusElement) {
-      const status = this.selectedFriend.status || "offline";
-      const statusText = status === "online" ? "● Online" : "○ Offline";
-      const statusColor =
-        status === "online" ? "text-green-600" : "text-gray-500";
-
-      this.selectedFriendStatusElement.textContent = statusText;
-      this.selectedFriendStatusElement.className = `text-sm ${statusColor}`;
-    }
-
-    // Load current online status for this friend
-    this.loadFriendCurrentStatus(this.selectedFriend.username);
-
-    // Load conversation history for this friend
+    // Update friend info
     if (this.selectedFriend) {
-      this.loadConversation(this.selectedFriend.friend_id);
-
-      // Mark messages as read
-      this.markMessagesAsRead(this.selectedFriend.friend_id);
-
-      // Clear notifications for this conversation since it's now open
-      this.clearConversationNotifications(this.selectedFriend.conversation_id);
-    }
-
-    // Focus on message input
-    if (this.messageInput) {
-      this.messageInput.focus();
-    }
-
-    if (this.selectedFriend) {
-      console.log(
-        `Selected unified conversation: ${this.selectedFriend.username}`
-      );
-    }
-  }
-
-  private showNoConversations(): void {
-    if (!this.conversationsLoading || !this.noConversations) return;
-
-    this.conversationsLoading.classList.add("hidden");
-    this.noConversations.classList.remove("hidden");
-  }
-
-  // Clear conversation selection and update URL
-  private clearConversationSelection(): void {
-    this.selectedFriend = null;
-
-    // Update URL to just /chat
-    window.history.pushState({}, "", "/chat");
-
-    // Show no friend selected state
-    if (this.noFriendSelectedElement && this.chatConversationElement) {
-      this.noFriendSelectedElement.classList.remove("hidden");
-      this.chatConversationElement.classList.add("hidden");
+      if (this.selectedFriendNameElement) {
+        this.selectedFriendNameElement.textContent =
+          this.selectedFriend.username;
+      }
+      if (this.selectedFriendAvatarElement) {
+        this.selectedFriendAvatarElement.textContent =
+          this.selectedFriend.username.charAt(0).toUpperCase();
+      }
+      if (this.selectedFriendStatusElement) {
+        this.selectedFriendStatusElement.textContent =
+          this.selectedFriend.status === "online" ? "● Online" : "○ Offline";
+        this.selectedFriendStatusElement.className =
+          this.selectedFriend.status === "online"
+            ? "text-sm text-green-600"
+            : "text-sm text-gray-500";
+      }
     }
   }
 
@@ -467,9 +330,6 @@ class ChatApp {
     try {
       await fetch(`/api/conversation/${friendId}/mark-read`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
       });
 
       // Update the unread count display
@@ -540,22 +400,14 @@ class ChatApp {
   private async loadConversationFromServer(friendId: number): Promise<void> {
     try {
       // Try to load conversation with current friend first
-      let response = await fetch(`/api/conversation/${friendId}`, {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
-      });
+      let response = await fetch(`/api/conversation/${friendId}`);
 
       // If that fails (e.g., they're no longer a friend), try the "anyone" endpoint
       if (!response.ok && response.status === 403) {
         console.log(
           "User is no longer a friend, trying to load conversation history anyway..."
         );
-        response = await fetch(`/api/conversation/${friendId}/anyone`, {
-          headers: {
-            Authorization: `Bearer ${this.token}`,
-          },
-        });
+        response = await fetch(`/api/conversation/${friendId}/anyone`);
       }
 
       if (response.ok) {
@@ -564,66 +416,226 @@ class ChatApp {
           text: msg.message_text,
           timestamp: msg.timestamp,
           sender: msg.sender_username,
-          sender_id: msg.sender_id,
+          messageId: msg.id.toString(),
+          isRead: msg.is_read,
         }));
 
         // Store in memory
         this.conversations.set(friendId, messages);
 
-        if (messages.length === 0) {
-          // Show no messages state
-          if (this.noMessagesElement && this.messagesContainer) {
-            this.noMessagesElement.classList.remove("hidden");
-            this.messagesContainer.classList.add("hidden");
-          }
-        } else {
-          // Show messages
-          if (this.noMessagesElement && this.messagesContainer) {
-            this.noMessagesElement.classList.add("hidden");
-            this.messagesContainer.classList.remove("hidden");
-          }
-
-          // Display messages
-          this.displayMessages(messages);
+        // Show messages
+        if (this.noMessagesElement && this.messagesContainer) {
+          this.noMessagesElement.classList.add("hidden");
+          this.messagesContainer.classList.remove("hidden");
         }
+
+        this.displayMessages(messages);
       } else {
         console.error("Failed to load conversation");
-        // Show no messages state
-        if (this.noMessagesElement && this.messagesContainer) {
-          this.noMessagesElement.classList.remove("hidden");
-          this.messagesContainer.classList.add("hidden");
-        }
+        this.showNoMessages();
       }
     } catch (error) {
       console.error("Error loading conversation:", error);
-      // Show no messages state
-      if (this.noMessagesElement && this.messagesContainer) {
-        this.noMessagesElement.classList.remove("hidden");
-        this.messagesContainer.classList.add("hidden");
-      }
+      this.showNoMessages();
     }
   }
 
-  private setUserInfo(): void {
-    if (!this.userInfoElement) return;
+  private displayMessages(messages: ChatMessage[]): void {
+    if (!this.messagesContainer) return;
 
-    // Get username from token or localStorage
-    const username = localStorage.getItem("username") || "User";
-    this.userInfoElement.textContent = `Welcome, ${username}!`;
+    this.messagesContainer.innerHTML = "";
+    messages.forEach((message) => {
+      const messageElement = this.createMessageElement(message);
+      if (this.messagesContainer) {
+        this.messagesContainer.appendChild(messageElement);
+      }
+    });
+
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
 
-  private initializeWebSocket(): void {
-    if (!this.token) {
-      console.error("No token found for WebSocket connection");
+  private createMessageElement(message: ChatMessage): HTMLElement {
+    const template = document.getElementById(
+      "messageTemplate"
+    ) as HTMLTemplateElement;
+    if (!template) return document.createElement("div");
+
+    const clone = template.content.cloneNode(true) as DocumentFragment;
+    const element = clone.firstElementChild as HTMLElement;
+    if (!element) return document.createElement("div");
+
+    // Set message content
+    const username = element.querySelector("span:first-of-type") as HTMLElement;
+    const timestamp = element.querySelector("span:last-of-type") as HTMLElement;
+    const messageText = element.querySelector("p") as HTMLElement;
+
+    if (username) username.textContent = message.sender;
+    if (timestamp)
+      timestamp.textContent = new Date(message.timestamp).toLocaleTimeString();
+    if (messageText) messageText.textContent = message.text;
+
+    return element;
+  }
+
+  private showNoMessages(): void {
+    if (this.noMessagesElement) {
+      this.noMessagesElement.classList.remove("hidden");
+    }
+    if (this.messagesContainer) {
+      this.messagesContainer.classList.add("hidden");
+    }
+  }
+
+  private showNoConversations(): void {
+    if (this.conversationsLoading) {
+      this.conversationsLoading.classList.add("hidden");
+    }
+    if (this.noConversations) {
+      this.noConversations.classList.remove("hidden");
+    }
+    if (this.conversationsList) {
+      this.conversationsList.classList.add("hidden");
+    }
+  }
+
+  private setupEventListeners(): void {
+    // Message input events
+    this.messageInput?.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        this.sendMessage();
+      }
+    });
+
+    this.sendButton?.addEventListener("click", () => {
+      this.sendMessage();
+    });
+
+    // Typing indicator
+    this.messageInput?.addEventListener("input", () => {
+      this.handleTyping();
+    });
+  }
+
+  private handleTyping(): void {
+    if (!this.selectedFriend) return;
+
+    const now = Date.now();
+    this.lastTypingTime = now;
+
+    // Clear existing timeout
+    if (this.typingTimeout) {
+      clearTimeout(this.typingTimeout);
+    }
+
+    // Set new timeout
+    this.typingTimeout = setTimeout(() => {
+      if (Date.now() - this.lastTypingTime >= 1000) {
+        this.clearTypingIndicator(this.selectedFriend!.username);
+      }
+    }, 1000);
+
+    // Send typing indicator
+    this.sendTypingIndicator(true);
+  }
+
+  private sendTypingIndicator(isTyping: boolean): void {
+    if (!this.selectedFriend || !this.ws) return;
+
+    const typingData = {
+      type: "typing_indicator",
+      recipient: this.selectedFriend.username,
+      is_typing: isTyping,
+    };
+
+    this.ws.send(JSON.stringify(typingData));
+  }
+
+  private clearTypingIndicator(username: string): void {
+    this.typingIndicators.delete(username);
+    // Update UI to hide typing indicator
+  }
+
+  private updateConversationTypingIndicators(): void {
+    // Update typing indicators in conversations list
+    this.typingIndicators.forEach((indicator, friendId) => {
+      // Find conversation element and show/hide typing indicator
+    });
+  }
+
+  private loadConversationsOnlineStatus(): void {
+    // Load online status for all conversations
+    // This would typically be done via WebSocket or API call
+  }
+
+  private sendMessage(): void {
+    if (!this.messageInput || !this.selectedFriend) return;
+
+    const messageText = this.messageInput.value.trim();
+    if (!messageText) return;
+
+    // Create message object
+    const message: ChatMessage = {
+      text: messageText,
+      timestamp: new Date().toISOString(),
+      sender: "You",
+      messageId: `msg_${Date.now()}`,
+      isRead: false,
+    };
+
+    // Add to local conversation
+    const conversation =
+      this.conversations.get(this.selectedFriend.friend_id) || [];
+    conversation.push(message);
+    this.conversations.set(this.selectedFriend.friend_id, conversation);
+
+    // Display message
+    this.displayMessages(conversation);
+
+    // Clear input
+    this.messageInput.value = "";
+
+    // Send via WebSocket
+    if (this.ws) {
+      const messageData = {
+        type: "message",
+        text: messageText,
+        recipient: this.selectedFriend.username,
+      };
+      this.ws.send(JSON.stringify(messageData));
+    }
+
+    // Clear typing indicator
+    this.clearTypingIndicator(this.selectedFriend.username);
+  }
+
+  private async initializeWebSocket(): Promise<void> {
+    try {
+      // Get auth token from server for WebSocket connection
+      const tokenResponse = await fetch("/api/ws-token");
+      if (!tokenResponse.ok) {
+        console.error("Failed to get WebSocket token");
+        this.updateConnectionStatus("Auth Failed", "bg-red-100 text-red-700");
+        return;
+      }
+
+      const tokenData = await tokenResponse.json();
+      const token = tokenData.token;
+
+      // Connect to WebSocket with token as query parameter
+      this.ws = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
+
+      this.setupWebSocketEventHandlers();
+    } catch (error) {
+      console.error("Error initializing WebSocket:", error);
       this.updateConnectionStatus(
-        "Not authenticated",
+        "Connection Failed",
         "bg-red-100 text-red-700"
       );
-      return;
     }
+  }
 
-    // Connect to WebSocket with authentication token
-    this.ws = new WebSocket(`ws://localhost:8000/ws?token=${this.token}`);
+  private setupWebSocketEventHandlers(): void {
+    if (!this.ws) return;
 
     this.ws.onopen = () => {
       console.log("WebSocket connected");
@@ -705,6 +717,9 @@ class ChatApp {
             "WebSocket connection established for user:",
             messageData.username
           );
+        } else if (messageData.type === "user_status_update") {
+          // Handle user status updates (online/offline)
+          this.handleUserStatusUpdate(messageData);
         } else if (messageData.type === "notification_update") {
           // Handle notification updates (like new messages from other users)
           if (messageData.notification_type === "new_message") {
@@ -714,20 +729,16 @@ class ChatApp {
               currentConversationId &&
               messageData.conversation_id === currentConversationId;
 
-            // Only refresh conversations list if the message isn't for the open conversation
             if (!isForOpenConversation) {
-              this.loadUnifiedConversations();
+              // Show notification for new message
+              this.showNotification(
+                `New message from ${messageData.sender_username}: ${messageData.message_preview}`
+              );
             }
           }
-        } else if (messageData.type === "user_status_update") {
-          // Handle user online/offline status updates
-          this.updateConversationStatus(
-            messageData.username,
-            messageData.status
-          );
         }
       } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
+        console.error("Error handling WebSocket message:", error);
       }
     };
 
@@ -738,263 +749,48 @@ class ChatApp {
 
     this.ws.onclose = () => {
       console.log("WebSocket connection closed");
-      this.updateConnectionStatus("Disconnected", "bg-gray-100 text-gray-700");
+      this.updateConnectionStatus(
+        "Disconnected",
+        "bg-yellow-100 text-yellow-700"
+      );
+
+      // Try to reconnect after a delay
+      setTimeout(() => {
+        this.initializeWebSocket();
+      }, 5000);
     };
   }
 
-  private updateConnectionStatus(text: string, classes: string): void {
-    if (!this.connectionStatusElement) return;
-
-    this.connectionStatusElement.textContent = text;
-    this.connectionStatusElement.className = `px-3 py-1 rounded-full text-sm ${classes}`;
-  }
-
-  private createMessageElement(messageData: any): HTMLElement {
-    const template = document.getElementById(
-      "messageTemplate"
-    ) as HTMLTemplateElement;
-    if (!template) return document.createElement("div");
-
-    const clone = template.content.cloneNode(true) as DocumentFragment;
-    const element = clone.firstElementChild as HTMLElement;
-    if (!element) return document.createElement("div");
-
-    // Set message info
-    const avatar = element.querySelector(".w-8.h-8") as HTMLElement;
-    const username = element.querySelector("span:first-of-type") as HTMLElement;
-    const timestamp = element.querySelector("span:last-of-type") as HTMLElement;
-    const messageText = element.querySelector("p") as HTMLElement;
-
-    // Check if this is the current user's message
-    // We need to get the sender ID from the message data or check by username
-    const currentUsername = localStorage.getItem("username");
-    const isOwnMessage =
-      messageData.sender === currentUsername ||
-      messageData.sender_id === this.currentUserId;
-
-    if (avatar) {
-      if (isOwnMessage) {
-        avatar.textContent = "Y"; // "You"
-      } else {
-        avatar.textContent =
-          messageData.sender?.charAt(0)?.toUpperCase() || "?";
-      }
+  private updateConnectionStatus(status: string, className: string): void {
+    if (this.connectionStatusElement) {
+      this.connectionStatusElement.textContent = status;
+      this.connectionStatusElement.className = className;
     }
-
-    if (username) {
-      if (isOwnMessage) {
-        username.textContent = "You";
-      } else {
-        username.textContent = messageData.sender || "Unknown";
-      }
-    }
-
-    if (timestamp)
-      timestamp.textContent = new Date(
-        messageData.timestamp
-      ).toLocaleTimeString();
-    if (messageText) messageText.textContent = messageData.text || messageData;
-
-    // Add message ID for read receipts
-    if (messageData.messageId) {
-      element.setAttribute("data-message-id", messageData.messageId);
-    }
-
-    // Add read receipt indicator
-    if (messageData.sender === localStorage.getItem("username")) {
-      const readIcon = document.createElement("span");
-      readIcon.className = `read-icon text-gray-400 text-xs ml-2 ${
-        messageData.isRead ? "text-blue-500" : ""
-      }`;
-      readIcon.innerHTML = messageData.isRead ? "✓✓" : "✓";
-      readIcon.title = messageData.isRead ? "Read" : "Delivered";
-
-      // Add to timestamp area
-      if (timestamp) {
-        timestamp.appendChild(readIcon);
-      }
-    }
-
-    return element;
-  }
-
-  private displayMessages(messages: ChatMessage[]): void {
-    if (!this.messagesContainer) return;
-
-    this.messagesContainer.innerHTML = "";
-    messages.forEach((message) => {
-      const messageElement = this.createMessageElement(message);
-      this.messagesContainer!.appendChild(messageElement);
-    });
-
-    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-  }
-
-  private sendMessage(): void {
-    if (!this.messageInput || !this.ws || !this.selectedFriend) return;
-
-    const message = this.messageInput.value.trim();
-    if (message) {
-      // Create message object for WebSocket
-      const messageData = {
-        text: message,
-        recipient: this.selectedFriend.username,
-      };
-
-      // Send message via WebSocket
-      this.ws.send(JSON.stringify(messageData));
-
-      // Create local message object
-      const localMessage: ChatMessage = {
-        text: message,
-        timestamp: new Date().toISOString(),
-        sender: localStorage.getItem("username") || "You",
-      };
-
-      // Add message to local conversation
-      const conversation =
-        this.conversations.get(this.selectedFriend.friend_id) || [];
-      conversation.push(localMessage);
-      this.conversations.set(this.selectedFriend.friend_id, conversation);
-
-      // Add message to local display
-      if (this.messagesContainer && this.noMessagesElement) {
-        this.noMessagesElement.classList.add("hidden");
-        this.messagesContainer.classList.remove("hidden");
-
-        const messageElement = this.createMessageElement(localMessage);
-        this.messagesContainer.appendChild(messageElement);
-        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-      }
-
-      this.messageInput.value = "";
-    }
-  }
-
-  private addEventListeners(): void {
-    if (!this.sendButton || !this.messageInput) return;
-
-    this.sendButton.addEventListener("click", () => this.sendMessage());
-    this.messageInput.addEventListener("keypress", (e: KeyboardEvent) => {
-      if (e.key === "Enter") {
-        this.sendMessage();
-      }
-    });
-
-    // Add typing indicator on input
-    this.messageInput.addEventListener("input", () => {
-      this.sendTypingIndicator(true);
-
-      // Clear previous timeout
-      if (this.typingTimeout) {
-        clearTimeout(this.typingTimeout);
-      }
-
-      // Set timeout to stop typing indicator after 3 seconds of no input
-      this.typingTimeout = setTimeout(() => {
-        this.sendTypingIndicator(false);
-      }, 3000);
-    });
-
-    // Add refresh button listeners
-    this.refreshConversationsButton = document.getElementById(
-      "refreshConversationsButton"
-    ) as HTMLButtonElement;
-    if (this.refreshConversationsButton) {
-      this.refreshConversationsButton.addEventListener("click", () => {
-        this.loadUnifiedConversations();
-      });
-    }
-
-    // Handle browser back/forward navigation
-    window.addEventListener("popstate", (event) => {
-      if (event.state && event.state.conversationId) {
-        // Restore conversation from URL
-        this.handleUrlBasedNavigation();
-      } else {
-        // Clear selected conversation
-        this.selectedFriend = null;
-        if (this.noFriendSelectedElement && this.chatConversationElement) {
-          this.noFriendSelectedElement.classList.remove("hidden");
-          this.chatConversationElement.classList.add("hidden");
-        }
-      }
-    });
-  }
-
-  // Typing indicator methods
-  private sendTypingIndicator(isTyping: boolean): void {
-    if (!this.ws || !this.selectedFriend) return;
-
-    const typingData = {
-      type: "typing_indicator",
-      recipient: this.selectedFriend.username,
-      isTyping: isTyping,
-    };
-
-    this.ws.send(JSON.stringify(typingData));
   }
 
   private handleTypingIndicator(data: any): void {
-    // Don't show typing indicator for ourselves
-    if (data.username === localStorage.getItem("username")) {
-      return;
-    }
+    if (data.sender_username === this.selectedFriend?.username) {
+      this.typingIndicators.set(data.sender_id, {
+        username: data.sender_username,
+        isTyping: data.is_typing,
+        timestamp: Date.now(),
+      });
 
-    // Show typing indicator in the conversations list
-    this.updateConversationTypingIndicator(data.username, data.isTyping);
-
-    // Only show typing indicator in chat if it's from the currently selected friend
-    if (
-      !this.selectedFriend ||
-      data.username !== this.selectedFriend.username
-    ) {
-      return;
-    }
-
-    if (data.isTyping) {
-      this.showTypingIndicator(data.username);
-    } else {
-      this.hideTypingIndicator(data.username);
+      // Update UI to show typing indicator
+      this.updateConversationTypingIndicators();
     }
   }
 
-  private showTypingIndicator(username: string): void {
-    // Create or update typing indicator
-    let typingElement = document.getElementById("typingIndicator");
-    if (!typingElement) {
-      typingElement = document.createElement("div");
-      typingElement.id = "typingIndicator";
-      typingElement.className =
-        "flex items-center space-x-2 text-gray-500 text-sm italic p-2";
-      typingElement.innerHTML = `
-        <div class="flex space-x-1">
-          <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-          <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-          <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-        </div>
-        <span>${username} is typing...</span>
-      `;
+  private handleReadReceipt(data: any): void {
+    // Handle read receipts for messages
+    if (this.pendingReadReceipts.has(data.message_id)) {
+      this.pendingReadReceipts.delete(data.message_id);
 
-      if (this.messagesContainer) {
-        this.messagesContainer.appendChild(typingElement);
-        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-      }
+      // Update message display to show as read
+      this.updateMessageReadStatus(data.message_id, true);
     }
   }
 
-  private hideTypingIndicator(username: string): void {
-    const typingElement = document.getElementById("typingIndicator");
-    if (typingElement) {
-      typingElement.remove();
-    }
-  }
-
-  private clearTypingIndicator(username: string): void {
-    this.hideTypingIndicator(username);
-  }
-
-  // Read receipt methods
   private sendReadReceipt(messageId: string): void {
     if (!this.ws) return;
 
@@ -1006,246 +802,105 @@ class ChatApp {
     this.ws.send(JSON.stringify(readReceipt));
   }
 
-  private handleReadReceipt(data: any): void {
-    // Update message read status in UI
+  private updateMessageReadStatus(messageId: string, isRead: boolean): void {
+    // Update the message display to show read status
     const messageElement = document.querySelector(
-      `[data-message-id="${data.message_id}"]`
+      `[data-message-id="${messageId}"]`
     );
     if (messageElement) {
-      const readIcon = messageElement.querySelector(".read-icon");
-      if (readIcon) {
-        readIcon.innerHTML = "✓✓"; // Double check for read
-        readIcon.className = "read-icon text-blue-500 text-xs";
-      }
+      // Update read status indicator
     }
-  }
-
-  private clearMessageNotifications(): void {
-    // Clear message notifications in navigation
-    document.dispatchEvent(new CustomEvent("clearMessageNotifications"));
-  }
-
-  // Conversation typing indicator methods
-  private updateConversationTypingIndicators(): void {
-    // Clear all existing typing indicators
-    const typingElements = document.querySelectorAll(
-      ".conversation-typing-indicator"
-    );
-    typingElements.forEach((el) => el.remove());
   }
 
   private updateConversationTypingIndicator(
     username: string,
     isTyping: boolean
   ): void {
-    // Find the conversation element for this user
-    const conversationElement = document.querySelector(
-      `[data-username="${username}"]`
+    // Update typing indicator in conversations list
+    this.typingIndicators.set(username, {
+      username,
+      isTyping,
+      timestamp: Date.now(),
+    });
+    this.updateConversationTypingIndicators();
+  }
+
+  private handleUserStatusUpdate(data: any): void {
+    // Update status indicators in conversations list
+    const username = data.username;
+    const status = data.status; // "online" or "offline"
+
+    console.log(`User ${username} is now ${status}`);
+
+    // Update status in conversations list
+    this.updateUserStatusInConversations(username, status);
+
+    // Update status in currently selected friend header if applicable
+    if (this.selectedFriend && this.selectedFriend.username === username) {
+      this.selectedFriend.status = status as "online" | "offline";
+      this.updateSelectedFriendStatus();
+    }
+  }
+
+  private updateUserStatusInConversations(
+    username: string,
+    status: "online" | "offline"
+  ): void {
+    // Find all conversation elements for this user and update their status indicators
+    const conversationElements = document.querySelectorAll(
+      ".flex.items-center.space-x-3.p-3.rounded-lg"
     );
-    if (!conversationElement) return;
 
-    // Remove existing typing indicator
-    const existingIndicator = conversationElement.querySelector(
-      ".conversation-typing-indicator"
-    );
-    if (existingIndicator) {
-      existingIndicator.remove();
-    }
-
-    if (isTyping) {
-      // Create and add typing indicator
-      const typingIndicator = document.createElement("div");
-      typingIndicator.className =
-        "conversation-typing-indicator flex items-center space-x-1 text-gray-500 text-xs italic ml-2";
-      typingIndicator.innerHTML = `
-        <div class="flex space-x-1">
-          <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div>
-          <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-          <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-        </div>
-        <span class="ml-1">typing...</span>
-      `;
-
-      // Find the conversation info area to add the typing indicator
-      const conversationInfo = conversationElement.querySelector(
-        ".conversation-last-message"
-      );
-      if (conversationInfo) {
-        conversationInfo.appendChild(typingIndicator);
-      }
-    }
-  }
-
-  // Check if a conversation is currently open
-  private isConversationOpen(conversationId: string): boolean {
-    return this.selectedFriend?.conversation_id === conversationId;
-  }
-
-  // Check if current URL has a conversation ID
-  private getCurrentConversationId(): string | null {
-    const pathParts = window.location.pathname.split("/");
-    if (pathParts.length >= 3 && pathParts[1] === "chat") {
-      return pathParts[2]; // Return the conversation ID as string (UUID)
-    }
-    return null;
-  }
-
-  // Handle URL-based navigation to restore conversation state
-  private async handleUrlBasedNavigation(): Promise<void> {
-    const conversationId = this.getCurrentConversationId();
-    if (conversationId) {
-      // Try to find the conversation in the loaded conversations
-      const response = await fetch("/api/recent-conversations", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const conversation = data.conversations.find(
-          (conv: any) => conv.conversation_id === conversationId
-        );
-
-        if (conversation) {
-          // Restore the conversation
-          this.selectUnifiedConversation(conversation);
+    conversationElements.forEach((element) => {
+      const usernameElement = element.querySelector(
+        ".conversation-username"
+      ) as HTMLElement;
+      if (usernameElement && usernameElement.textContent === username) {
+        const statusIndicator = element.querySelector(
+          ".status-indicator"
+        ) as HTMLElement;
+        if (statusIndicator) {
+          if (status === "online") {
+            statusIndicator.classList.add("bg-green-500");
+            statusIndicator.classList.remove("bg-gray-400");
+          } else {
+            statusIndicator.classList.add("bg-gray-400");
+            statusIndicator.classList.remove("bg-green-500");
+          }
         }
-      }
-    }
-  }
-
-  // Clear notifications for a specific conversation
-  private clearConversationNotifications(conversationId: string): void {
-    // Dispatch event to clear navigation notifications
-    document.dispatchEvent(
-      new CustomEvent("clearConversationNotifications", {
-        detail: { conversationId },
-      })
-    );
-  }
-
-  // Update conversation status in the conversations list
-  private updateConversationStatus(username: string, status: string): void {
-    const statusElements = document.querySelectorAll(
-      `[data-username="${username}"] .status-indicator`
-    );
-
-    statusElements.forEach((element) => {
-      const statusElement = element as HTMLElement;
-      if (status === "online") {
-        statusElement.className = "w-2 h-2 bg-green-500 rounded-full";
-        statusElement.title = `${username} is online`;
-      } else {
-        statusElement.className = "w-2 h-2 bg-gray-400 rounded-full";
-        statusElement.title = `${username} is offline`;
       }
     });
+  }
 
-    // Also update the selected friend's status if this is the current friend
-    if (this.selectedFriend && this.selectedFriend.username === username) {
-      this.updateSelectedFriendStatus(status);
+  private updateSelectedFriendStatus(): void {
+    if (this.selectedFriend && this.selectedFriendStatusElement) {
+      this.selectedFriendStatusElement.textContent =
+        this.selectedFriend.status === "online" ? "● Online" : "○ Offline";
+      this.selectedFriendStatusElement.className =
+        this.selectedFriend.status === "online"
+          ? "text-sm text-green-600"
+          : "text-sm text-gray-500";
     }
   }
 
-  // Load online status for all conversations
-  private async loadConversationsOnlineStatus(): Promise<void> {
-    try {
-      const response = await fetch("/api/friends/online-status", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Update status indicators for each friend
-        data.friends_status.forEach((friendStatus: any) => {
-          this.updateConversationStatus(
-            friendStatus.username,
-            friendStatus.status
-          );
-        });
-      }
-    } catch (error) {
-      console.error("Error loading conversations online status:", error);
-    }
+  private getCurrentConversationId(): string | null {
+    return this.selectedFriend?.conversation_id || null;
   }
 
-  // Select conversation by conversation ID
-  private async selectConversationById(conversationId: string): Promise<void> {
-    try {
-      // Load conversations first to make sure we have the data
-      await this.loadUnifiedConversations();
+  private showNotification(message: string): void {
+    // Show a toast notification
+    console.log("Notification:", message);
 
-      // Find the conversation with this ID
-      const response = await fetch("/api/recent-conversations", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const conversation = data.conversations.find(
-          (conv: any) => conv.conversation_id === conversationId
-        );
-
-        if (conversation) {
-          // Select this conversation
-          this.selectUnifiedConversation(conversation);
-        } else {
-          console.log("Conversation not found:", conversationId);
-        }
-      }
-    } catch (error) {
-      console.error("Error selecting conversation by ID:", error);
-    }
-  }
-
-  // Update the selected friend's status in the chat header
-  private updateSelectedFriendStatus(status: string): void {
-    if (!this.selectedFriendStatusElement) return;
-
-    const statusText = status === "online" ? "● Online" : "○ Offline";
-    const statusColor =
-      status === "online" ? "text-green-600" : "text-gray-500";
-
-    this.selectedFriendStatusElement.textContent = statusText;
-    this.selectedFriendStatusElement.className = `text-sm ${statusColor}`;
-
-    // Also update the friend object status
-    if (this.selectedFriend) {
-      this.selectedFriend.status = status as "online" | "offline";
-    }
-  }
-
-  // Load current online status for a specific friend
-  private async loadFriendCurrentStatus(username: string): Promise<void> {
-    try {
-      const response = await fetch("/api/friends/online-status", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const friendStatus = data.friends_status.find(
-          (fs: any) => fs.username === username
-        );
-        
-        if (friendStatus) {
-          this.updateConversationStatus(username, friendStatus.status);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading friend current status:", error);
-    }
+    // You could implement a proper toast notification system here
+    // For now, just log to console
   }
 }
 
-// Initialize chat when DOM is loaded
+// Initialize the chat app when the DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
-  new ChatApp();
+  try {
+    new ChatApp();
+  } catch (error) {
+    console.error("Failed to initialize ChatApp:", error);
+  }
 });

@@ -36,7 +36,7 @@ class HomePageManager {
   }
 
   private async loadContent(): Promise<void> {
-    const token = localStorage.getItem("token");
+    const token = null;
 
     if (token) {
       // User is authenticated, show authenticated content

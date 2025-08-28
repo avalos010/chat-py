@@ -23,16 +23,10 @@ interface Friend {
 }
 
 class FriendsManager {
-  private token: string | null = null;
+  // Token is now stored in HttpOnly cookies, not accessible from JavaScript
   private ws: WebSocket | null = null;
 
   constructor() {
-    this.token = localStorage.getItem("token");
-    if (!this.token) {
-      window.location.href = "/login";
-      return;
-    }
-
     this.initialize();
   }
 
@@ -88,11 +82,7 @@ class FriendsManager {
     try {
       const response = await fetch(
         `/api/users/search?q=${encodeURIComponent(searchTerm)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${this.token}`,
-          },
-        }
+        {}
       );
 
       if (response.ok) {
@@ -176,7 +166,6 @@ class FriendsManager {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${this.token}`,
         },
         body: JSON.stringify({ friend_id: friendId }),
       });
@@ -206,9 +195,7 @@ class FriendsManager {
   private async loadFriendRequests(): Promise<void> {
     try {
       const response = await fetch("/api/friend-requests", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
+        headers: {},
       });
 
       if (response.ok) {
@@ -227,9 +214,7 @@ class FriendsManager {
   private async loadSentFriendRequests(): Promise<void> {
     try {
       const response = await fetch("/api/sent-friend-requests", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
+        headers: {},
       });
 
       if (response.ok) {
@@ -406,7 +391,6 @@ class FriendsManager {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${this.token}`,
         },
         body: JSON.stringify({ friend_id: friendId }),
       });
@@ -432,7 +416,6 @@ class FriendsManager {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${this.token}`,
         },
         body: JSON.stringify({ friend_id: friendId }),
       });
@@ -459,9 +442,7 @@ class FriendsManager {
     try {
       const response = await fetch(`/api/friend-request/cancel/${friendId}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
+        headers: {},
       });
 
       if (response.ok) {
@@ -481,9 +462,7 @@ class FriendsManager {
   private async loadFriendsList(): Promise<void> {
     try {
       const response = await fetch("/api/friends", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
+        headers: {},
       });
 
       if (response.ok) {
@@ -592,9 +571,7 @@ class FriendsManager {
     try {
       const response = await fetch(`/api/friends/${friendId}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
+        headers: {},
       });
 
       if (response.ok) {
@@ -631,9 +608,7 @@ class FriendsManager {
   private async loadAllFriendRequests(): Promise<void> {
     try {
       const response = await fetch("/api/all-friend-requests", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
+        headers: {},
       });
 
       if (response.ok) {
@@ -793,30 +768,44 @@ class FriendsManager {
     // This method is no longer needed
   }
 
-  private initializeWebSocket(): void {
-    // Use the same WebSocket endpoint as the main app
-    this.ws = new WebSocket(`ws://localhost:8000/ws?token=${this.token}`);
-
-    this.ws.onopen = () => {
-      console.log("Friends WebSocket connected");
-    };
-
-    this.ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        this.handleWebSocketMessage(message);
-      } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
+  private async initializeWebSocket(): Promise<void> {
+    try {
+      // Get auth token from server for WebSocket connection
+      const tokenResponse = await fetch("/api/ws-token");
+      if (!tokenResponse.ok) {
+        console.error("Failed to get WebSocket token for friends");
+        return;
       }
-    };
 
-    this.ws.onerror = (error) => {
-      console.error("Friends WebSocket error:", error);
-    };
+      const tokenData = await tokenResponse.json();
+      const token = tokenData.token;
 
-    this.ws.onclose = () => {
-      console.log("Friends WebSocket connection closed");
-    };
+      // Connect to WebSocket with token as query parameter
+      this.ws = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
+
+      this.ws.onopen = () => {
+        console.log("Friends WebSocket connected");
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          this.handleWebSocketMessage(message);
+        } catch (error) {
+          console.error("Error parsing WebSocket message:", error);
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.error("Friends WebSocket error:", error);
+      };
+
+      this.ws.onclose = () => {
+        console.log("Friends WebSocket connection closed");
+      };
+    } catch (error) {
+      console.error("Error initializing friends WebSocket:", error);
+    }
   }
 
   private handleWebSocketMessage(message: any): void {
@@ -901,9 +890,7 @@ class FriendsManager {
   private async loadFriendsOnlineStatus(): Promise<void> {
     try {
       const response = await fetch("/api/friends/online-status", {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
+        headers: {},
       });
 
       if (response.ok) {

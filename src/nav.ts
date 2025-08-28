@@ -26,7 +26,7 @@ class NavigationManager {
   private navChatElement: HTMLElement | null;
   private navFriendsElement: HTMLElement | null;
   private ws: WebSocket | null = null;
-  private token: string | null = null;
+  // Token is now stored in HttpOnly cookies, not accessible from JavaScript
   private notificationCounts = {
     messages: 0,
     friendRequests: 0,
@@ -38,7 +38,6 @@ class NavigationManager {
     this.navSignoutElement = document.getElementById("nav-signout");
     this.navChatElement = document.getElementById("nav-chat");
     this.navFriendsElement = document.getElementById("nav-friends");
-    this.token = localStorage.getItem("token");
     this.initialize();
   }
 
@@ -54,9 +53,8 @@ class NavigationManager {
     this.setupEventListeners();
 
     // Initialize WebSocket if authenticated
-    if (this.token) {
-      this.initializeWebSocket();
-    }
+    // With cookie-based auth, we'll check auth status from server
+    this.initializeWebSocket();
   }
 
   private hideProtectedRoutes(): void {
@@ -93,22 +91,15 @@ class NavigationManager {
   }
 
   private updateNavigation(): void {
-    const token = localStorage.getItem("token");
+    const token = null;
 
-    if (token) {
-      this.showAuthenticatedState();
-      // Initialize WebSocket if not already done
-      if (!this.ws) {
-        this.token = token;
-        this.initializeWebSocket();
-      }
-    } else {
-      this.showUnauthenticatedState();
-      // Close WebSocket if authenticated
-      if (this.ws) {
-        this.ws.close();
-        this.ws = null;
-      }
+    // With cookie-based auth, we'll check auth status from server
+    // For now, always show authenticated state and let the server handle auth
+    this.showAuthenticatedState();
+
+    // Initialize WebSocket
+    if (!this.ws) {
+      this.initializeWebSocket();
     }
   }
 
@@ -191,31 +182,44 @@ class NavigationManager {
     }
   }
 
-  private initializeWebSocket(): void {
-    if (!this.token) return;
-
-    this.ws = new WebSocket(`ws://localhost:8000/ws?token=${this.token}`);
-
-    this.ws.onopen = () => {
-      console.log("Navigation WebSocket connected");
-    };
-
-    this.ws.onmessage = (event: MessageEvent) => {
-      try {
-        const data: NotificationData = JSON.parse(event.data);
-        this.handleWebSocketMessage(data);
-      } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
+  private async initializeWebSocket(): Promise<void> {
+    try {
+      // Get auth token from server for WebSocket connection
+      const tokenResponse = await fetch("/api/ws-token");
+      if (!tokenResponse.ok) {
+        console.error("Failed to get WebSocket token for navigation");
+        return;
       }
-    };
 
-    this.ws.onerror = (error) => {
-      console.error("Navigation WebSocket error:", error);
-    };
+      const tokenData = await tokenResponse.json();
+      const token = tokenData.token;
 
-    this.ws.onclose = () => {
-      console.log("Navigation WebSocket connection closed");
-    };
+      // Connect to WebSocket with token as query parameter
+      this.ws = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
+
+      this.ws.onopen = () => {
+        console.log("Navigation WebSocket connected");
+      };
+
+      this.ws.onmessage = (event: MessageEvent) => {
+        try {
+          const data: NotificationData = JSON.parse(event.data);
+          this.handleWebSocketMessage(data);
+        } catch (error) {
+          console.error("Error parsing WebSocket message:", error);
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.error("Navigation WebSocket error:", error);
+      };
+
+      this.ws.onclose = () => {
+        console.log("Navigation WebSocket connection closed");
+      };
+    } catch (error) {
+      console.error("Error initializing navigation WebSocket:", error);
+    }
   }
 
   private handleWebSocketMessage(data: NotificationData): void {
