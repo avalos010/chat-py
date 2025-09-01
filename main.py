@@ -662,7 +662,10 @@ async def websocket_endpoint(websocket: WebSocket):
                             }
                             
                             # Send to recipient if they're online
-                            for conn in connections:
+                            connections_copy = connections.copy()
+                            broken_connections = []
+                            
+                            for conn in connections_copy:
                                 if conn["user_id"] == recipient_user.id:
                                     try:
                                         await conn["websocket"].send_text(json.dumps(message_to_send))
@@ -679,8 +682,13 @@ async def websocket_endpoint(websocket: WebSocket):
                                             "timestamp": message_to_send["timestamp"]
                                         }))
                                     except:
-                                        # Remove broken connection
-                                        connections.remove(conn)
+                                        # Mark for removal
+                                        broken_connections.append(conn)
+                            
+                            # Remove broken connections
+                            for broken_conn in broken_connections:
+                                if broken_conn in connections:
+                                    connections.remove(broken_conn)
                             
                             # Send confirmation back to sender
                             confirmation = {
@@ -706,12 +714,20 @@ async def websocket_endpoint(websocket: WebSocket):
                                         "timestamp": datetime.now().isoformat()
                                     }
                                     
-                                    for conn in connections:
+                                    connections_copy = connections.copy()
+                                    broken_connections = []
+                                    
+                                    for conn in connections_copy:
                                         if conn["user_id"] == recipient_user.id:
                                             try:
                                                 await conn["websocket"].send_text(json.dumps(typing_message))
                                             except:
-                                                connections.remove(conn)
+                                                broken_connections.append(conn)
+                                    
+                                    # Remove broken connections
+                                    for broken_conn in broken_connections:
+                                        if broken_conn in connections:
+                                            connections.remove(broken_conn)
                                                 
                         elif message_data.get("type") == "read_receipt":
                             # Handle read receipt
@@ -729,11 +745,19 @@ async def websocket_endpoint(websocket: WebSocket):
                                 }
                                 
                                 # Send to all connections (in a real app, you'd send only to the message sender)
-                                for conn in connections:
+                                connections_copy = connections.copy()
+                                broken_connections = []
+                                
+                                for conn in connections_copy:
                                     try:
                                         await conn["websocket"].send_text(json.dumps(read_receipt))
                                     except:
-                                        connections.remove(conn)
+                                        broken_connections.append(conn)
+                                
+                                # Remove broken connections
+                                for broken_conn in broken_connections:
+                                    if broken_conn in connections:
+                                        connections.remove(broken_conn)
                         
                     except json.JSONDecodeError:
                         # Handle non-JSON messages (fallback)
@@ -741,7 +765,15 @@ async def websocket_endpoint(websocket: WebSocket):
                         
             except Exception as e:
                 print(f"WebSocket error for user {user.username}: {e}")
-                connections.remove(user_connection)
+                # Remove connection safely
+                if user_connection in connections:
+                    connections.remove(user_connection)
+                # Notify other users that this user is now offline
+                await broadcast_user_status_update(user.id, user.username, "offline")
+            finally:
+                # Always clean up connection when WebSocket closes
+                if user_connection in connections:
+                    connections.remove(user_connection)
                 # Notify other users that this user is now offline
                 await broadcast_user_status_update(user.id, user.username, "offline")
                 
@@ -762,12 +794,21 @@ async def broadcast_user_status_update(user_id: int, username: str, status: str)
         "timestamp": datetime.now().isoformat()
     }
     
-    for conn in connections:
+    # Create a copy of connections to avoid modification during iteration
+    connections_copy = connections.copy()
+    broken_connections = []
+    
+    for conn in connections_copy:
         try:
             await conn["websocket"].send_text(json.dumps(status_message))
         except:
-            # Remove broken connection
-            connections.remove(conn)
+            # Mark for removal
+            broken_connections.append(conn)
+    
+    # Remove broken connections
+    for broken_conn in broken_connections:
+        if broken_conn in connections:
+            connections.remove(broken_conn)
 
 
 async def broadcast_friend_request_update(sender_id: int, sender_username: str, recipient_id: int, recipient_username: str, request_type: str):
@@ -783,13 +824,20 @@ async def broadcast_friend_request_update(sender_id: int, sender_username: str, 
     }
     
     # Send to both sender and recipient if they're online
-    for conn in connections:
+    connections_copy = connections.copy()
+    broken_connections = []
+    
+    for conn in connections_copy:
         if conn["user_id"] in [sender_id, recipient_id]:
             try:
                 await conn["websocket"].send_text(json.dumps(request_message))
             except:
-                # Remove broken connection
-                connections.remove(conn)
+                broken_connections.append(conn)
+    
+    # Remove broken connections
+    for broken_conn in broken_connections:
+        if broken_conn in connections:
+            connections.remove(broken_conn)
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30

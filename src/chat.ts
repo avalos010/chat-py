@@ -42,6 +42,7 @@ class ChatApp {
 
   private selectedFriend: Friend | null = null;
   private conversations: Map<number, ChatMessage[]> = new Map();
+  private friendsStatus: any[] = [];
   private refreshConversationsButton: HTMLButtonElement | null = null;
 
   // Typing indicator and read receipt system
@@ -257,7 +258,13 @@ class ChatApp {
 
     // Set online status
     if (statusIndicator) {
-      if (conversation.status === "online") {
+      // Get status from friendsStatus array
+      const friendStatus = this.friendsStatus.find(
+        (f) => f.username === conversation.username
+      );
+      const status = friendStatus?.status || conversation.status || "offline";
+
+      if (status === "online") {
         statusIndicator.classList.add("bg-green-500");
         statusIndicator.classList.remove("bg-gray-400");
       } else {
@@ -279,13 +286,19 @@ class ChatApp {
   private selectConversation(conversation: any): void {
     console.log("Selecting conversation:", conversation);
 
+    // Get status from friendsStatus array
+    const friendStatus = this.friendsStatus.find(
+      (f) => f.username === conversation.username
+    );
+    const status = friendStatus?.status || conversation.status || "offline";
+
     // Update selected friend
     this.selectedFriend = {
       friend_id: conversation.friend_id,
       conversation_id: conversation.conversation_id,
       username: conversation.username,
       email: conversation.email,
-      status: conversation.status,
+      status: status,
       unread_count: conversation.unread_count,
     };
 
@@ -562,9 +575,33 @@ class ChatApp {
     });
   }
 
-  private loadConversationsOnlineStatus(): void {
-    // Load online status for all conversations
-    // This would typically be done via WebSocket or API call
+  private async loadConversationsOnlineStatus(): Promise<void> {
+    try {
+      const response = await fetch("/api/friends/online-status");
+      if (response.ok) {
+        const data = await response.json();
+        const friendsStatus = data.friends_status || [];
+
+        // Update status indicators for each friend
+        friendsStatus.forEach((friend: any) => {
+          this.updateUserStatusInConversations(friend.username, friend.status);
+
+          // Update selected friend status if this is the currently selected friend
+          if (
+            this.selectedFriend &&
+            this.selectedFriend.username === friend.username
+          ) {
+            this.selectedFriend.status = friend.status;
+            this.updateSelectedFriendStatus();
+          }
+        });
+
+        // Store status information for later use
+        this.friendsStatus = friendsStatus;
+      }
+    } catch (error) {
+      console.error("Error loading online status:", error);
+    }
   }
 
   private sendMessage(): void {

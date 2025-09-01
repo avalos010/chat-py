@@ -411,7 +411,7 @@ class Database:
             rows = await cursor.fetchall()
             return [
                 {
-                    "user_id": row[0],
+                    "friend_id": row[0],
                     "username": row[1],
                     "email": row[2],
                     "conversation_id": row[3],
