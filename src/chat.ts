@@ -753,7 +753,9 @@ class ChatApp {
       }
     } catch (error) {
       console.error("Error loading online status:", error);
-    }
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsHost = window.location.host;
+    this.ws = new WebSocket(`${wsProtocol}//${wsHost}/ws?token=${this.token}`);
   }
 
   private sendMessage(): void {
