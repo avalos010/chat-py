@@ -64,7 +64,7 @@ class FriendsManager {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
           if (searchInput.value.trim().length >= 2) {
-            this.searchUsers(searchInput.value.trim());
+            let searchTimeout: ReturnType<typeof setTimeout>;
           } else {
             this.hideSearchResults();
           }
