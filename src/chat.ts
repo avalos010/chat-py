@@ -43,6 +43,7 @@ class ChatApp {
   private selectedFriend: Friend | null = null;
   private conversations: Map<number, ChatMessage[]> = new Map();
   private friendsStatus: any[] = [];
+  private conversationsData: any[] = []; // Store conversations data for URL routing
   private refreshConversationsButton: HTMLButtonElement | null = null;
 
   // Typing indicator and read receipt system
@@ -122,6 +123,9 @@ class ChatApp {
         this.loadUnifiedConversations();
       });
     }
+
+    // Check for conversation ID in URL and auto-select if present
+    this.handleInitialConversationFromURL();
   }
 
   private async getCurrentUserInfo(): Promise<void> {
@@ -176,6 +180,9 @@ class ChatApp {
       });
       return;
     }
+
+    // Store conversations data for URL routing
+    this.conversationsData = conversations;
 
     // Hide loading
     this.conversationsLoading.classList.add("hidden");
@@ -234,12 +241,35 @@ class ChatApp {
     const statusIndicator = element.querySelector(
       ".status-indicator"
     ) as HTMLElement;
+    const messageSender = element.querySelector(
+      ".conversation-message-sender"
+    ) as HTMLElement;
+    const typingIndicator = element.querySelector(
+      ".conversation-typing-indicator"
+    ) as HTMLElement;
+    const readStatus = element.querySelector(
+      ".conversation-read-status"
+    ) as HTMLElement;
 
     if (avatar)
       avatar.textContent = conversation.username.charAt(0).toUpperCase();
     if (username) username.textContent = conversation.username;
     if (lastMessage) {
-      lastMessage.textContent = conversation.last_message || "No messages yet";
+      lastMessage.textContent =
+        conversation.last_message_text || "No messages yet";
+    }
+
+    // Set message sender indicator
+    if (messageSender) {
+      if (conversation.last_message_sender === this.currentUserId) {
+        messageSender.textContent = "You:";
+        messageSender.className =
+          "conversation-message-sender text-xs text-blue-500";
+      } else {
+        messageSender.textContent = `${conversation.username}:`;
+        messageSender.className =
+          "conversation-message-sender text-xs text-gray-400";
+      }
     }
 
     // Set unread count
@@ -273,6 +303,19 @@ class ChatApp {
       }
     }
 
+    // Set read status for messages sent by current user
+    if (readStatus && conversation.last_message_sender === this.currentUserId) {
+      // Show read status if the last message was sent by current user
+      readStatus.classList.remove("hidden");
+    } else if (readStatus) {
+      readStatus.classList.add("hidden");
+    }
+
+    // Initialize typing indicator as hidden
+    if (typingIndicator) {
+      typingIndicator.classList.add("hidden");
+    }
+
     // Add click event to select conversation
     element.addEventListener("click", () => {
       if (conversation) {
@@ -301,6 +344,9 @@ class ChatApp {
       status: status,
       unread_count: conversation.unread_count,
     };
+
+    // Update URL to include conversation ID
+    this.updateURLForConversation(conversation.conversation_id);
 
     // Update UI
     this.showChatConversation();
@@ -527,10 +573,34 @@ class ChatApp {
     this.messageInput?.addEventListener("input", () => {
       this.handleTyping();
     });
+
+    // Clear typing indicator when input loses focus
+    this.messageInput?.addEventListener("blur", () => {
+      console.log("Input lost focus, clearing typing indicator");
+      this.clearTypingIndicator();
+    });
+
+    // Clear any existing timeout when input gains focus
+    this.messageInput?.addEventListener("focus", () => {
+      if (this.typingTimeout) {
+        clearTimeout(this.typingTimeout);
+        this.typingTimeout = null;
+      }
+    });
+
+    // Add a global method for debugging - clear all typing indicators
+    (window as any).clearAllTypingIndicators = () => {
+      console.log("Force clearing all typing indicators");
+      this.typingIndicators.clear();
+      this.updateConversationTypingIndicators();
+      this.updateMainChatTypingIndicator(false);
+    };
   }
 
   private handleTyping(): void {
     if (!this.selectedFriend) return;
+
+    console.log("Typing detected for:", this.selectedFriend.username);
 
     const now = Date.now();
     this.lastTypingTime = now;
@@ -560,18 +630,100 @@ class ChatApp {
       is_typing: isTyping,
     };
 
+    console.log("Sending typing indicator:", typingData);
     this.ws.send(JSON.stringify(typingData));
   }
 
-  private clearTypingIndicator(username: string): void {
-    this.typingIndicators.delete(username);
+  private clearTypingIndicator(username?: string): void {
+    console.log("clearTypingIndicator called with username:", username);
+    console.log(
+      "Current typingIndicators:",
+      Array.from(this.typingIndicators.keys())
+    );
+
+    if (username) {
+      // Clear specific user's typing indicator
+      this.typingIndicators.delete(username);
+      console.log("Cleared typing indicator for:", username);
+
+      // Also clear typing indicator in main chat if this is the selected friend
+      if (username === this.selectedFriend?.username) {
+        this.updateMainChatTypingIndicator(false);
+      }
+    } else if (this.selectedFriend) {
+      // Clear current user's typing indicator (when input loses focus)
+      console.log(
+        "Clearing current user typing indicator for:",
+        this.selectedFriend.username
+      );
+      this.typingIndicators.delete(this.selectedFriend.username);
+      this.updateMainChatTypingIndicator(false);
+
+      // Send stop typing indicator to the selected friend
+      this.sendTypingIndicator(false);
+    }
+
     // Update UI to hide typing indicator
+    this.updateConversationTypingIndicators();
+    console.log(
+      "Updated UI, remaining typingIndicators:",
+      Array.from(this.typingIndicators.keys())
+    );
   }
 
   private updateConversationTypingIndicators(): void {
+    console.log("updateConversationTypingIndicators called");
     // Update typing indicators in conversations list
-    this.typingIndicators.forEach((indicator, friendId) => {
-      // Find conversation element and show/hide typing indicator
+    const conversationElements = document.querySelectorAll(
+      ".flex.items-center.space-x-3.p-3.rounded-lg"
+    );
+
+    console.log("Found conversation elements:", conversationElements.length);
+
+    conversationElements.forEach((element, index) => {
+      const usernameElement = element.querySelector(
+        ".conversation-username"
+      ) as HTMLElement;
+      const typingIndicator = element.querySelector(
+        ".conversation-typing-indicator"
+      ) as HTMLElement;
+      const lastMessage = element.querySelector(
+        ".conversation-last-message"
+      ) as HTMLElement;
+      const messageSender = element.querySelector(
+        ".conversation-message-sender"
+      ) as HTMLElement;
+
+      if (usernameElement && typingIndicator) {
+        const username = usernameElement.textContent;
+        const isTyping = this.typingIndicators.has(username || "");
+
+        console.log(
+          `Conversation ${index}: ${username}, isTyping: ${isTyping}`
+        );
+
+        if (isTyping) {
+          // Show typing indicator
+          console.log(`Showing typing indicator for ${username}`);
+          typingIndicator.classList.remove("hidden");
+          const typingUsername = typingIndicator.querySelector(
+            ".typing-username"
+          ) as HTMLElement;
+          if (typingUsername) {
+            typingUsername.textContent = username || "";
+          }
+          // Hide last message and sender when typing
+          if (lastMessage) lastMessage.classList.add("hidden");
+          if (messageSender) messageSender.classList.add("hidden");
+        } else {
+          // Hide typing indicator
+          console.log(`Hiding typing indicator for ${username}`);
+          typingIndicator.classList.add("hidden");
+          // Show last message and sender when not typing
+          if (lastMessage) lastMessage.classList.remove("hidden");
+          if (messageSender) messageSender.classList.remove("hidden");
+        }
+      }
     });
   }
 
@@ -806,15 +958,26 @@ class ChatApp {
   }
 
   private handleTypingIndicator(data: any): void {
-    if (data.sender_username === this.selectedFriend?.username) {
-      this.typingIndicators.set(data.sender_id, {
-        username: data.sender_username,
-        isTyping: data.is_typing,
+    console.log("Received typing indicator:", data);
+
+    // Handle typing indicators for all conversations, not just selected one
+    if (data.is_typing) {
+      this.typingIndicators.set(data.username, {
+        username: data.username,
+        isTyping: true,
         timestamp: Date.now(),
       });
+    } else {
+      this.typingIndicators.delete(data.username);
+    }
 
-      // Update UI to show typing indicator
-      this.updateConversationTypingIndicators();
+    // Update UI to show/hide typing indicators
+    this.updateConversationTypingIndicators();
+
+    // Also update typing indicator in the main chat if this is the selected friend
+    if (data.username === this.selectedFriend?.username) {
+      // Update main chat typing indicator
+      this.updateMainChatTypingIndicator(data.is_typing);
     }
   }
 
@@ -860,6 +1023,32 @@ class ChatApp {
       timestamp: Date.now(),
     });
     this.updateConversationTypingIndicators();
+  }
+
+  private updateMainChatTypingIndicator(isTyping: boolean): void {
+    console.log(
+      "updateMainChatTypingIndicator called with isTyping:",
+      isTyping
+    );
+    // Update typing indicator in the main chat area
+    const typingIndicator = document.querySelector(".typing-indicator");
+    console.log("Found main chat typing indicator:", !!typingIndicator);
+
+    if (typingIndicator) {
+      if (isTyping) {
+        console.log("Showing main chat typing indicator");
+        typingIndicator.classList.remove("hidden");
+        // Set the username in the typing indicator
+        const typingUsername =
+          typingIndicator.querySelector(".typing-username");
+        if (typingUsername && this.selectedFriend) {
+          typingUsername.textContent = this.selectedFriend.username;
+        }
+      } else {
+        console.log("Hiding main chat typing indicator");
+        typingIndicator.classList.add("hidden");
+      }
+    }
   }
 
   private handleUserStatusUpdate(data: any): void {
@@ -930,6 +1119,104 @@ class ChatApp {
 
     // You could implement a proper toast notification system here
     // For now, just log to console
+  }
+
+  private handleInitialConversationFromURL(): void {
+    // Check if there's a conversation ID in the URL path
+    const pathParts = window.location.pathname.split("/");
+    const conversationId = pathParts[pathParts.length - 1];
+
+    // Also check for conversation_id from backend template
+    const templateConversationId = (window as any).initialConversationId;
+
+    const targetConversationId =
+      conversationId !== "chat" ? conversationId : templateConversationId;
+
+    if (targetConversationId && targetConversationId !== "") {
+      console.log("Found conversation ID in URL:", targetConversationId);
+      // Wait a bit for conversations to load, then try to select
+      setTimeout(() => {
+        this.selectConversationById(targetConversationId);
+      }, 1000);
+    }
+  }
+
+  private selectConversationById(conversationId: string): void {
+    // Find the conversation with matching ID
+    const conversationElements = document.querySelectorAll(
+      ".flex.items-center.space-x-3.p-3.rounded-lg"
+    );
+
+    for (let i = 0; i < conversationElements.length; i++) {
+      const element = conversationElements[i];
+      const usernameElement = element.querySelector(
+        ".conversation-username"
+      ) as HTMLElement;
+
+      if (usernameElement) {
+        const username = usernameElement.textContent;
+        // We need to find the conversation data by username
+        // Since we don't have direct access to the conversation data here,
+        // we'll trigger a click on the matching element
+        const conversationData = this.findConversationDataByUsername(username);
+        if (
+          conversationData &&
+          conversationData.conversation_id === conversationId
+        ) {
+          console.log("Auto-selecting conversation:", conversationData);
+          this.selectConversation(conversationData);
+          return;
+        }
+      }
+    }
+
+    console.log("Could not find conversation with ID:", conversationId);
+  }
+
+  private findConversationDataByUsername(username: string): any | null {
+    // This is a helper method to find conversation data by username
+    // We'll need to store the conversations data when we load them
+    return (
+      this.conversationsData?.find((conv: any) => conv.username === username) ||
+      null
+    );
+  }
+
+  private updateURLForConversation(conversationId: string): void {
+    // Update the URL to include the conversation ID
+    const newUrl = `/chat/${conversationId}`;
+    window.history.pushState({ conversationId }, "", newUrl);
+
+    // Add event listener for browser back/forward navigation
+    window.addEventListener("popstate", (event) => {
+      this.handlePopState(event);
+    });
+  }
+
+  private handlePopState(event: PopStateEvent): void {
+    // Handle browser back/forward navigation
+    const pathParts = window.location.pathname.split("/");
+    const conversationId = pathParts[pathParts.length - 1];
+
+    if (conversationId === "chat") {
+      // User navigated back to main chat page
+      this.clearSelectedConversation();
+    } else {
+      // User navigated to a specific conversation
+      this.selectConversationById(conversationId);
+    }
+  }
+
+  private clearSelectedConversation(): void {
+    // Clear the selected conversation and show the "no friend selected" state
+    this.selectedFriend = null;
+
+    if (this.noFriendSelectedElement) {
+      this.noFriendSelectedElement.classList.remove("hidden");
+    }
+    if (this.chatConversationElement) {
+      this.chatConversationElement.classList.add("hidden");
+    }
   }
 }
 

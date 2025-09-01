@@ -126,6 +126,18 @@ content %}
               class="h-[400px] overflow-y-auto mb-4 p-4 space-y-3 bg-gray-50 rounded-lg hidden"
             ></div>
 
+            <!-- Typing indicator for main chat -->
+            <div
+              class="typing-indicator hidden text-sm text-blue-500 italic mb-2"
+            >
+              <span class="typing-username"></span> is typing
+              <span class="typing-dots">
+                <span class="dot">.</span>
+                <span class="dot">.</span>
+                <span class="dot">.</span>
+              </span>
+            </div>
+
             <!-- Message Input -->
             <div class="flex space-x-4">
               <input
@@ -162,7 +174,23 @@ content %}
       <p
         class="text-sm font-medium text-gray-900 truncate conversation-username"
       ></p>
-      <p class="text-xs text-gray-500 truncate conversation-last-message"></p>
+      <div class="flex items-center space-x-1">
+        <span class="conversation-message-sender text-xs text-gray-400"></span>
+        <p class="text-xs text-gray-500 truncate conversation-last-message"></p>
+      </div>
+      <div
+        class="conversation-typing-indicator hidden text-xs text-blue-500 italic"
+      >
+        <span class="typing-username"></span> is typing
+        <span class="typing-dots">
+          <span class="dot">.</span>
+          <span class="dot">.</span>
+          <span class="dot">.</span>
+        </span>
+      </div>
+      <div class="conversation-read-status hidden text-xs text-green-500">
+        ✓ Read
+      </div>
     </div>
     <div class="flex items-center space-x-2">
       <div class="status-indicator w-2 h-2 bg-green-500 rounded-full"></div>

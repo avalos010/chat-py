@@ -701,7 +701,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         elif message_data.get("type") == "typing_indicator":
                             # Handle typing indicator
                             recipient_username = message_data.get("recipient", "")
-                            is_typing = message_data.get("isTyping", False)
+                            is_typing = message_data.get("is_typing", False)
                             
                             if recipient_username:
                                 recipient_user = await get_user(db, recipient_username)
@@ -710,7 +710,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                     typing_message = {
                                         "type": "typing_indicator",
                                         "username": user.username,
-                                        "isTyping": is_typing,
+                                        "is_typing": is_typing,
                                         "timestamp": datetime.now().isoformat()
                                     }
                                     
