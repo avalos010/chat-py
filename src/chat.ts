@@ -753,9 +753,7 @@ class ChatApp {
       }
     } catch (error) {
       console.error("Error loading online status:", error);
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsHost = window.location.host;
-    this.ws = new WebSocket(`${wsProtocol}//${wsHost}/ws?token=${this.token}`);
+    }
   }
 
   private sendMessage(): void {
@@ -813,7 +811,9 @@ class ChatApp {
       const token = tokenData.token;
 
       // Connect to WebSocket with token as query parameter
-      this.ws = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsHost = window.location.host;
+      this.ws = new WebSocket(`${wsProtocol}//${wsHost}/ws?token=${token}`);
 
       this.setupWebSocketEventHandlers();
     } catch (error) {
