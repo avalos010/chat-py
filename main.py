@@ -347,7 +347,12 @@ async def get_conversation(request: Request, friend_id: int):
     if not is_friend:
         raise HTTPException(status_code=403, detail="Can only view conversations with friends")
     
-    conversation = await db.get_conversation(user.id, friend_id)
+
+    # Check if target user exists
+    target_user = await db.get_user_by_id(friend_data.friend_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     return {"conversation": conversation}
 
 @app.get("/api/conversation/{user_id}/anyone")
