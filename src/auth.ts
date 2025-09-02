@@ -107,8 +107,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Check authentication status when page loads
   handlePageLoadAuth();
 
-  // Special handling for chat page to prevent flash
-  if (window.location.pathname === "/chat") {
+  // Special handling for chat pages (including subpaths) to prevent flash
+  if (window.location.pathname === "/chat" || window.location.pathname.startsWith("/chat/")) {
     try {
       const response = await fetch("/check-auth");
       if (!response.ok) {
