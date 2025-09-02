@@ -399,7 +399,7 @@ class Database:
                     (
                         SELECT COUNT(*) 
                         FROM messages m2 
-                        WHERE m2.sender_id = ? AND m2.recipient_id = rm.other_user_id AND m2.is_read = FALSE
+                        WHERE m2.recipient_id = ? AND m2.sender_id = rm.other_user_id AND m2.is_read = FALSE
                     ) as unread_count
                 FROM recent_messages rm
                 JOIN users u ON rm.other_user_id = u.id
