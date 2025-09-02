@@ -950,14 +950,19 @@ class ChatApp {
     };
   }
 
-  private updateConnectionStatus(status: string, className: string): void {
-    if (this.connectionStatusElement) {
-      this.connectionStatusElement.textContent = status;
-      // Preserve existing classes, replace only bg/text color utility classes
-      const el = this.connectionStatusElement;
-      el.classList.remove("bg-green-100","text-green-700","bg-red-100","text-red-700","bg-yellow-100","text-yellow-700");
-      className.split(" ").forEach(c => c && el.classList.add(c));
-    }
+  private updateConnectionStatus(status: string, classNames: string): void {
+    if (!this.connectionStatusElement) return;
+    const el = this.connectionStatusElement;
+    el.textContent = status;
+    el.classList.remove(
+      "bg-green-100","text-green-700",
+      "bg-red-100","text-red-700",
+      "bg-yellow-100","text-yellow-700"
+    );
+    classNames
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((c) => el.classList.add(c));
   }
 
   private handleTypingIndicator(data: any): void {
