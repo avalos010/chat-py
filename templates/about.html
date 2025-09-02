@@ -416,7 +416,7 @@ block content %}
 ></script>
 <script
   type="module"
-  src="{{ url_for('static', path='/js/about-simple.js') }}"
+  src="{{ url_for('static', path='/js/about.js') }}?v={{ range(1, 1000) | random }}"
 ></script>
 <script
   type="module"

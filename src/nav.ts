@@ -90,23 +90,47 @@ class NavigationManager {
     );
   }
 
-  private updateNavigation(): void {
-    const token = null;
+  private async updateNavigation(): Promise<void> {
+    try {
+      // Check authentication status from server
+      const response = await fetch("/api/user/me", {
+        method: "GET",
+        credentials: "include",
+      });
 
-    // With cookie-based auth, we'll check auth status from server
-    // For now, always show authenticated state and let the server handle auth
-    this.showAuthenticatedState();
+      if (response.ok) {
+        const userData = await response.json();
+        this.showAuthenticatedState(userData.username);
 
-    // Initialize WebSocket
-    if (!this.ws) {
-      this.initializeWebSocket();
+        // Initialize WebSocket only if authenticated
+        if (!this.ws) {
+          this.initializeWebSocket();
+        }
+      } else {
+        this.showUnauthenticatedState();
+
+        // Close WebSocket if not authenticated
+        if (this.ws) {
+          this.ws.close();
+          this.ws = null;
+        }
+      }
+    } catch (error) {
+      console.error("Auth check failed:", error);
+      this.showUnauthenticatedState();
+
+      // Close WebSocket on error
+      if (this.ws) {
+        this.ws.close();
+        this.ws = null;
+      }
     }
   }
 
-  private showAuthenticatedState(): void {
+  private showAuthenticatedState(username?: string): void {
     if (this.authStatusElement) {
       this.authStatusElement.innerHTML = `
-        <span class="text-green-400">✓ Authenticated</span>
+        <span class="text-sunset font-medium">${username || "User"}</span>
       `;
     }
 
@@ -144,13 +168,18 @@ class NavigationManager {
     if (this.navSignoutElement) {
       this.navSignoutElement.classList.add("hidden");
     }
+
+    // Hide About link for authenticated users (they get redirected anyway)
+    const aboutLink = document.getElementById("nav-about");
+    if (aboutLink) {
+      aboutLink.classList.add("hidden");
+      aboutLink.style.display = "none";
+    }
   }
 
   private showUnauthenticatedState(): void {
     if (this.authStatusElement) {
-      this.authStatusElement.innerHTML = `
-        <span class="text-gray-400">Not authenticated</span>
-      `;
+      this.authStatusElement.innerHTML = ``;
     }
 
     if (this.authButtonsElement) {
@@ -169,6 +198,13 @@ class NavigationManager {
         </a>
       `;
       this.authButtonsElement.classList.remove("hidden");
+    }
+
+    // Show About link for unauthenticated users
+    const aboutLink = document.getElementById("nav-about");
+    if (aboutLink) {
+      aboutLink.classList.remove("hidden");
+      aboutLink.style.display = "";
     }
 
     // Explicitly hide protected navigation links for unauthenticated users
@@ -356,23 +392,39 @@ class NavigationManager {
     this.updateFriendsNotificationBadge();
   }
 
-  private handleLogout(): void {
-    localStorage.removeItem("token");
+  private async handleLogout(): Promise<void> {
+    try {
+      await fetch("/logout", { method: "POST" });
 
-    // Close WebSocket
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+      // Clear localStorage and sessionStorage
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Clear any lingering Supabase cookies
+      document.cookie =
+        "sb-rttctcyfriyzpllxyvju-auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
+      // Close WebSocket
+      if (this.ws) {
+        this.ws.close();
+        this.ws = null;
+      }
+
+      // Reset notification counts
+      this.notificationCounts = { messages: 0, friendRequests: 0 };
+
+      // Dispatch custom event to notify other components
+      document.dispatchEvent(new CustomEvent("authStateChanged"));
+
+      // Redirect to login page
+      window.location.replace("/login");
+    } catch (error) {
+      // Clear storage even on error
+      localStorage.clear();
+      sessionStorage.clear();
+      // Redirect anyway
+      window.location.replace("/login");
     }
-
-    // Reset notification counts
-    this.notificationCounts = { messages: 0, friendRequests: 0 };
-
-    // Dispatch custom event to notify other components
-    document.dispatchEvent(new CustomEvent("authStateChanged"));
-
-    // Redirect to login page
-    window.location.href = "/login";
   }
 
   // Public method to trigger navigation update

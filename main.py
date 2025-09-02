@@ -268,7 +268,11 @@ async def signup(user_create: UserCreate):
 #     return templates.TemplateResponse("unauthorized.html", {"request": request, "message": "Unauthorized access"})
 @app.get("/")
 async def root(request: Request):
-    """Serve the home page - authentication handled client-side"""
+    """Serve the home page - redirect authenticated users to chat"""
+    user = getattr(request.state, 'user', None)
+    if user:
+        # Redirect authenticated users to chat
+        return RedirectResponse(url="/chat", status_code=302)
     return templates.TemplateResponse("home.html", {"request": request})
 
 @app.get("/check-auth")
@@ -283,7 +287,11 @@ async def check_auth(request: Request):
 # About page route
 @app.get("/about")
 async def about(request: Request):
-    """Serve the about page template"""
+    """Serve the about page - redirect authenticated users to chat"""
+    user = getattr(request.state, 'user', None)
+    if user:
+        # Redirect authenticated users to chat
+        return RedirectResponse(url="/chat", status_code=302)
     return templates.TemplateResponse("about.html", {"request": request})
 
 @app.get("/friends")
@@ -349,10 +357,12 @@ async def get_conversation(request: Request, friend_id: int):
     
 
     # Check if target user exists
-    target_user = await db.get_user_by_id(friend_data.friend_id)
+    target_user = await db.get_user_by_id(friend_id)
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Get the conversation
+    conversation = await db.get_conversation(user.id, friend_id)
     return {"conversation": conversation}
 
 @app.get("/api/conversation/{user_id}/anyone")

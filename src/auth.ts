@@ -73,12 +73,18 @@ async function handlePageLoadAuth(): Promise<void> {
         window.location.pathname === "/login" ||
         window.location.pathname === "/signup"
       ) {
-        window.location.href = "/chat";
+        // Add a small delay to prevent immediate redirect after logout
+        setTimeout(() => {
+          window.location.href = "/chat";
+        }, 200);
         return;
       }
     } else {
-      // Only redirect to login if not already there
-      if (window.location.pathname !== "/login") {
+      // Only redirect to login if not already there and not on home page
+      if (
+        window.location.pathname !== "/login" &&
+        window.location.pathname !== "/"
+      ) {
         window.location.href = "/login";
       }
     }
@@ -175,18 +181,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         submitButton.textContent = "Sign in";
       }
     }
-  });
-
-  // Add logout functionality
-  const logoutButton = document.getElementById("logoutButton");
-  logoutButton?.addEventListener("click", async () => {
-    try {
-      await fetch("/logout", { method: "POST" });
-      console.log("Logged out successfully");
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-    window.location.href = "/login";
   });
 
   signupForm?.addEventListener("submit", async (e) => {
