@@ -399,22 +399,20 @@ class ChatApp {
   }
 
   private updateUnreadCount(friendId: number, count: number): void {
-    // Find the friend element and update the unread badge
-    const friendElements = document.querySelectorAll(".friend-item");
-    friendElements.forEach((element) => {
-      const usernameElement = element.querySelector("p:first-of-type");
-      if (
-        usernameElement &&
-        usernameElement.textContent === this.selectedFriend?.username
-      ) {
-        const unreadBadge = element.querySelector(".unread-badge");
-        if (unreadBadge) {
-          if (count > 0) {
-            unreadBadge.textContent = count.toString();
-            unreadBadge.classList.remove("hidden");
-          } else {
-            unreadBadge.classList.add("hidden");
-          }
+    const conversationItems = document.querySelectorAll(
+      "#conversationsList .flex.items-center.space-x-3.p-3.rounded-lg"
+    );
+    conversationItems.forEach((el) => {
+      const usernameEl = el.querySelector(".conversation-username") as HTMLElement | null;
+      const unreadBadge = el.querySelector(".unread-badge") as HTMLElement | null;
+      if (!usernameEl || !unreadBadge) return;
+      if (usernameEl.textContent === this.selectedFriend?.username) {
+        if (count > 0) {
+          const unreadCount = unreadBadge.querySelector(".unread-count") as HTMLElement | null;
+          if (unreadCount) unreadCount.textContent = String(count);
+          unreadBadge.classList.remove("hidden");
+        } else {
+          unreadBadge.classList.add("hidden");
         }
       }
     });
