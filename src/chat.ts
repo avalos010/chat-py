@@ -955,7 +955,10 @@ class ChatApp {
   private updateConnectionStatus(status: string, className: string): void {
     if (this.connectionStatusElement) {
       this.connectionStatusElement.textContent = status;
-      this.connectionStatusElement.className = className;
+      // Preserve existing classes, replace only bg/text color utility classes
+      const el = this.connectionStatusElement;
+      el.classList.remove("bg-green-100","text-green-700","bg-red-100","text-red-700","bg-yellow-100","text-yellow-700");
+      className.split(" ").forEach(c => c && el.classList.add(c));
     }
   }
 
