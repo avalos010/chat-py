@@ -59,12 +59,13 @@ class FriendsManager {
       });
 
       // Search on input change (debounced)
-      let searchTimeout: NodeJS.Timeout;
+      let searchTimeout: ReturnType<typeof setTimeout>;
       searchInput.addEventListener("input", () => {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
-          if (searchInput.value.trim().length >= 2) {
-            let searchTimeout: ReturnType<typeof setTimeout>;
+          const term = searchInput.value.trim();
+          if (term.length >= 2) {
+            this.searchUsers(term);
           } else {
             this.hideSearchResults();
           }
