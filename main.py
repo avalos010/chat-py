@@ -504,20 +504,23 @@ async def send_friend_request(request: Request, friend_data: FriendRequestData):
 async def accept_friend_request(request: Request, friend_data: FriendRequestData):
     """Accept a friend request"""
     user = await get_current_user_from_request(request)
+
+    # Ensure a pending inbound request exists
+    pending = await db.get_friend_requests(user.id)
+    if not any(req["user_id"] == friend_data.friend_id for req in pending):
+        raise HTTPException(status_code=400, detail="No pending request from this user")
+
     success = await db.accept_friend_request(user.id, friend_data.friend_id)
     if success:
-        # Get sender user info for WebSocket notification
         sender_user = await db.get_user_by_id(friend_data.friend_id)
         if sender_user:
-            # Broadcast friend request update via WebSocket
             await broadcast_friend_request_update(
-                sender_user.id, sender_user.username, 
-                user.id, user.username, 
+                sender_user.id, sender_user.username,
+                user.id, user.username,
                 "accepted"
             )
         return {"message": "Friend request accepted"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to accept friend request")
+    raise HTTPException(status_code=500, detail="Failed to accept friend request")
 
 @app.post("/api/friend-request/reject")
 async def reject_friend_request(request: Request, friend_data: FriendRequestData):
