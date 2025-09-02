@@ -36,7 +36,9 @@ class HomePageManager {
   }
 
   private async loadContent(): Promise<void> {
-    const token = null;
+    // Prefer cookie-based auth; fallback to localStorage for backward compatibility
+    const cookieToken = document.cookie.split("; ").find(c => c.startsWith("auth_token="))?.split("=")[1] || null;
+    const token = cookieToken || localStorage.getItem("token");
 
     if (token) {
       // User is authenticated, show authenticated content
