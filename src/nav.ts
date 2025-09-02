@@ -435,12 +435,21 @@ class NavigationManager {
   }
 
   // Clear notifications for a specific conversation
+  // Add field near notificationCounts
+  // private conversationMessageCounts: Record<string, number> = {};
+  // Update handlers where messages arrive:
+  // this.conversationMessageCounts[data.conversation_id] = (this.conversationMessageCounts[data.conversation_id] || 0) + 1;
+  // this.notificationCounts.messages = Object.values(this.conversationMessageCounts).reduce((a,b)=>a+b,0);
+
   private clearConversationNotifications(conversationId: string): void {
-    // Clear message notifications for this conversation
-    this.notificationCounts.messages = Math.max(
-      0,
-      this.notificationCounts.messages - 1
-    );
+    // Reset count for this conversation and update global badge
+    // Ensure the map exists
+    // @ts-ignore - declared alongside notificationCounts
+    if (!this.conversationMessageCounts) this.conversationMessageCounts = {};
+    // @ts-ignore
+    this.conversationMessageCounts[conversationId] = 0;
+    // @ts-ignore
+    this.notificationCounts.messages = Object.values(this.conversationMessageCounts).reduce((a, b) => a + b, 0);
     this.updateChatNotificationBadge();
   }
 }
