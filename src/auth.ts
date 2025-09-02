@@ -1,6 +1,4 @@
 console.log("=== AUTH.TS SCRIPT LOADING ===");
-console.log("Script is executing...");
-console.log("About to define interfaces...");
 
 interface LoginData {
   username: string;
@@ -14,85 +12,22 @@ interface SignupData {
   confirmPassword: string;
 }
 
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-}
-
 // Function to make authenticated requests
 function makeAuthenticatedRequest(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const token = localStorage.getItem("token");
-  if (token) {
-    options.headers = {
-      ...options.headers,
-      Authorization: `Bearer ${token}`,
-    };
-  }
+  // With cookie-based authentication, the browser automatically sends cookies
   return fetch(url, options);
-}
-
-// Override fetch to automatically add Authorization header
-function setupAuthInterceptor(): void {
-  const originalFetch = window.fetch;
-  window.fetch = function (
-    url: string | Request | URL,
-    options: RequestInit = {}
-  ) {
-    const token = localStorage.getItem("token");
-    if (
-      token &&
-      typeof url === "string" &&
-      !url.includes("/token") &&
-      !url.includes("/signup")
-    ) {
-      options.headers = {
-        ...options.headers,
-        Authorization: `Bearer ${token}`,
-      };
-    }
-    return originalFetch(url, options);
-  };
-}
-
-// Function to check if user is authenticated
-function isAuthenticated(): boolean {
-  return localStorage.getItem("token") !== null;
-}
-
-// Function to redirect to login if not authenticated
-function redirectToLoginIfNotAuthenticated(): void {
-  if (!isAuthenticated()) {
-    window.location.href = "/login";
-  }
 }
 
 // Function to check authentication status from server
 async function checkServerAuth(): Promise<boolean> {
-  console.log("=== checkServerAuth called ===");
-  const token = localStorage.getItem("token");
-  console.log(
-    "Token in checkServerAuth:",
-    token ? token.substring(0, 20) + "..." : "null"
-  );
-
   try {
-    console.log("Making request to /check-auth...");
-    const response = await makeAuthenticatedRequest("/check-auth");
-    console.log("Response status:", response.status);
-    console.log("Response ok:", response.ok);
-    console.log("Response headers:", response.headers);
-
+    const response = await fetch("/check-auth");
     if (response.ok) {
       const data = await response.json();
-      console.log("Response data:", data);
       return data.authenticated;
-    } else {
-      console.log("Response not ok, status:", response.status);
-      const errorText = await response.text();
-      console.log("Error response body:", errorText);
     }
   } catch (error) {
     console.error("Auth check failed:", error);
@@ -100,164 +35,87 @@ async function checkServerAuth(): Promise<boolean> {
   return false;
 }
 
-// Function to protect routes that require authentication
-async function protectRoute(): Promise<void> {
-  const token = localStorage.getItem("token");
-  if (!token) {
-    window.location.href = "/login";
-    return;
-  }
-
+// Function to redirect to login if not authenticated
+async function redirectToLoginIfNotAuthenticated(): Promise<void> {
   try {
-    // Verify token is valid by checking server auth
     const isAuth = await checkServerAuth();
     if (!isAuth) {
-      localStorage.removeItem("token");
+      window.location.href = "/login";
+    }
+  } catch (error) {
+    console.error("Auth check failed:", error);
+    window.location.href = "/login";
+  }
+}
+
+// Function to protect routes that require authentication
+async function protectRoute(): Promise<void> {
+  try {
+    const isAuth = await checkServerAuth();
+    if (!isAuth) {
       window.location.href = "/login";
       return;
     }
   } catch (error) {
     console.error("Route protection failed:", error);
-    localStorage.removeItem("token");
     window.location.href = "/login";
   }
 }
 
 // Function to handle page load authentication
 async function handlePageLoadAuth(): Promise<void> {
-  console.log("=== handlePageLoadAuth called ===");
-  const token = localStorage.getItem("token");
-  console.log("Token found:", !!token);
-
-  if (token) {
-    console.log("Checking server auth...");
-    // Check if token is valid on server
+  try {
     const isAuth = await checkServerAuth();
-    console.log("Server auth result:", isAuth);
 
     if (isAuth) {
-      console.log("User is authenticated, checking if redirect needed...");
-      console.log("Current pathname:", window.location.pathname);
-      console.log(
-        "Should redirect to dashboard?",
-        window.location.pathname === "/" ||
-          window.location.pathname === "/login"
-      );
-
-      // User is authenticated, redirect to dashboard
+      // If user is authenticated and on login/signup pages, redirect to chat
       if (
-        window.location.pathname === "/" ||
-        window.location.pathname === "/login"
+        window.location.pathname === "/login" ||
+        window.location.pathname === "/signup"
       ) {
-        console.log("Redirecting to dashboard from:", window.location.pathname);
-        const token = localStorage.getItem("token");
-        if (token) {
-          // Pre-verify authentication before redirecting
-          console.log("Pre-verifying authentication...");
-          try {
-            const authResponse = await fetch("/check-auth", {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            });
-
-            if (authResponse.ok) {
-              console.log(
-                "Authentication verified, redirecting to dashboard..."
-              );
-              window.location.href = `/dashboard?token=${encodeURIComponent(
-                token
-              )}`;
-            } else {
-              console.log(
-                "Authentication failed, clearing token and staying on login"
-              );
-              localStorage.removeItem("token");
-              document.cookie =
-                "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-            }
-          } catch (error) {
-            console.error("Auth check failed:", error);
-            localStorage.removeItem("token");
-            document.cookie =
-              "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-          }
-        } else {
-          window.location.href = "/dashboard";
-        }
-      } else {
-        console.log(
-          "No redirect needed, current path:",
-          window.location.pathname
-        );
-        console.log("User is already on a protected page");
-        console.log("Current page:", window.location.href);
+        // Add a small delay to prevent immediate redirect after logout
+        setTimeout(() => {
+          window.location.href = "/chat";
+        }, 200);
+        return;
       }
     } else {
-      console.log("Token is invalid, clearing it");
-      // Token is invalid, clear it and stay on current page
-      localStorage.removeItem("token");
+      // Only redirect to login if not already there and not on home page
+      if (
+        window.location.pathname !== "/login" &&
+        window.location.pathname !== "/"
+      ) {
+        window.location.href = "/login";
+      }
     }
-  } else {
-    console.log("No token found, staying on current page");
+  } catch (error) {
+    console.error("Server auth check failed:", error);
   }
 }
 
 // Export for use in other modules
 export {
   makeAuthenticatedRequest,
-  isAuthenticated,
-  redirectToLoginIfNotAuthenticated,
   checkServerAuth,
+  redirectToLoginIfNotAuthenticated,
   protectRoute,
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   console.log("DOM Content Loaded - Auth script is running!");
-  console.log("Window location:", window.location.href);
-  console.log("Document ready state:", document.readyState);
-
-  // Setup automatic Authorization header injection
-  setupAuthInterceptor();
 
   // Check authentication status when page loads
-  console.log("About to call handlePageLoadAuth...");
   handlePageLoadAuth();
 
-  // Special handling for dashboard page to prevent flash
-  if (window.location.pathname === "/dashboard") {
-    console.log("Dashboard page detected, checking auth immediately...");
-    const token = localStorage.getItem("token");
-    if (token) {
-      // Show loading state immediately
-      const loginRedirect = document.getElementById("login-redirect");
-      if (loginRedirect) {
-        loginRedirect.classList.remove("hidden");
+  // Special handling for chat pages (including subpaths) to prevent flash
+  if (window.location.pathname === "/chat" || window.location.pathname.startsWith("/chat/")) {
+    try {
+      const response = await fetch("/check-auth");
+      if (!response.ok) {
+        window.location.href = "/login";
       }
-
-      // Verify authentication
-      fetch("/check-auth", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-        .then((response) => {
-          if (response.ok) {
-            console.log("Dashboard auth successful");
-            if (loginRedirect) {
-              loginRedirect.classList.add("hidden");
-            }
-          } else {
-            console.log("Dashboard auth failed, redirecting to login");
-            window.location.href = "/login";
-          }
-        })
-        .catch((error) => {
-          console.error("Dashboard auth check failed:", error);
-          window.location.href = "/login";
-        });
-    } else {
-      console.log("No token found, redirecting to login");
+    } catch (error) {
+      console.error("Chat auth check failed:", error);
       window.location.href = "/login";
     }
   }
@@ -265,45 +123,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const loginForm = document.getElementById("loginForm");
   const signupForm = document.getElementById("signupForm");
 
-  console.log("Login form found:", !!loginForm);
-  console.log("Signup form found:", !!signupForm);
-
   loginForm?.addEventListener("submit", async (e) => {
-    console.log("=== LOGIN FORM SUBMITTED ===");
-    console.log("Event type:", e.type);
-    console.log("Default prevented:", e.defaultPrevented);
-
     e.preventDefault();
-    console.log(
-      "Default prevented after preventDefault():",
-      e.defaultPrevented
-    );
 
     const form = e.target as HTMLFormElement;
-    console.log("Form element:", form);
-    console.log("Form action:", form.action);
-    console.log("Form method:", form.method);
     const formData = new FormData(form);
     const username = formData.get("username");
     const password = formData.get("password");
 
-    console.log("Form data:", {
-      username,
-      password: password ? "[HIDDEN]" : "undefined",
-    });
+    if (!username || !password) {
+      alert("Username and password are required.");
+      return;
+    }
 
-    // Validate form data
-    if (!username || typeof username !== "string" || username.trim() === "") {
-      alert("Username is required.");
-      return;
-    }
-    if (!password || typeof password !== "string" || password.trim() === "") {
-      alert("Password is required.");
-      return;
-    }
     const loginData: LoginData = {
-      username: username.trim(),
-      password: password.trim(),
+      username: username.toString().trim(),
+      password: password.toString().trim(),
     };
 
     // Disable form during submission
@@ -315,47 +150,32 @@ document.addEventListener("DOMContentLoaded", () => {
       submitButton.textContent = "Signing in...";
     }
 
-    console.log("Sending login request to /token");
     try {
-      const response = await fetch("/token", {
+      const response = await fetch("/login", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: JSON.stringify(loginData),
+        body: new URLSearchParams({
+          username: loginData.username,
+          password: loginData.password,
+        }),
       });
 
-      console.log("Login response status:", response.status);
       if (response.ok) {
-        const data: TokenResponse = await response.json();
-        console.log("Login successful, token received:", data);
-        localStorage.setItem("token", data.access_token);
-
-        // Also set a cookie for server-side authentication
-        document.cookie = `auth_token=${data.access_token}; path=/; max-age=1800; SameSite=Strict`;
-
-        // Redirect to dashboard after successful login
-        console.log("Redirecting to dashboard...");
-        console.log("Current location before redirect:", window.location.href);
-
-        // Force a hard redirect
-        try {
-          window.location.replace("/dashboard");
-        } catch (error) {
-          console.error("Redirect failed:", error);
-          // Fallback: try to navigate
-          window.location.href = "/dashboard";
-        }
+        const data = await response.json();
+        console.log("Login successful, redirecting to:", data.redirect_url);
+        window.location.replace(data.redirect_url);
       } else {
-        const errorData = await response.text();
-        console.error("Login failed:", errorData);
-        alert("Login failed. Please check your credentials.");
+        const errorData = await response.json();
+        alert(
+          errorData.detail || "Login failed. Please check your credentials."
+        );
       }
     } catch (error) {
       console.error("Login error:", error);
       alert("An error occurred during login. Please try again.");
     } finally {
-      // Re-enable form
       if (submitButton) {
         submitButton.disabled = false;
         submitButton.textContent = "Sign in";
@@ -363,15 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Add logout functionality
-  const logoutButton = document.getElementById("logoutButton");
-  logoutButton?.addEventListener("click", () => {
-    localStorage.removeItem("token");
-    window.location.href = "/login";
-  });
-
   signupForm?.addEventListener("submit", async (e) => {
-    console.log("Signup form submitted");
     e.preventDefault();
 
     const form = e.target as HTMLFormElement;
@@ -382,13 +194,6 @@ document.addEventListener("DOMContentLoaded", () => {
       password: formData.get("password") as string,
       confirmPassword: formData.get("password2") as string,
     };
-
-    console.log("Signup data:", {
-      username: signupData.username,
-      email: signupData.email,
-      password: signupData.password ? "[HIDDEN]" : "undefined",
-      confirmPassword: signupData.confirmPassword ? "[HIDDEN]" : "undefined",
-    });
 
     // Validate signup data
     if (!signupData.username || signupData.username.trim() === "") {
@@ -417,7 +222,6 @@ document.addEventListener("DOMContentLoaded", () => {
       submitButton.textContent = "Signing up...";
     }
 
-    console.log("Sending signup request to /signup");
     try {
       const response = await fetch("/signup", {
         method: "POST",
@@ -427,7 +231,6 @@ document.addEventListener("DOMContentLoaded", () => {
         },
       });
 
-      console.log("Signup response status:", response.status);
       if (response.ok) {
         alert("Signup successful! You can now log in.");
         window.location.href = "/login";
@@ -440,7 +243,6 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Signup error:", error);
       alert("An error occurred during signup. Please try again.");
     } finally {
-      // Re-enable form
       if (submitButton) {
         submitButton.disabled = false;
         submitButton.textContent = "Sign up";

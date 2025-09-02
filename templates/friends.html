@@ -1,0 +1,205 @@
+{% extends "base.html" %} {% block title %}Friends - chat-py{% endblock %} {%
+block content %}
+<div class="min-h-screen bg-gray-50">
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Search Section -->
+    <div class="mb-8">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Find Friends</h2>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="flex-1 relative">
+            <input
+              type="text"
+              id="userSearch"
+              placeholder="Search by username..."
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
+            />
+          </div>
+          <button
+            id="searchBtn"
+            class="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+          >
+            Search
+          </button>
+        </div>
+
+        <!-- Search Results -->
+        <div id="searchResults" class="mt-4 space-y-3 hidden">
+          <!-- Search results will be populated here -->
+        </div>
+
+        <!-- No Results Message -->
+        <div id="noResults" class="text-gray-500 text-center py-4 hidden">
+          No users found
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Friend Requests Section -->
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-gray-900">Friend Requests</h2>
+        </div>
+
+        <!-- All Friend Requests -->
+        <div id="allFriendRequests">
+          <!-- This will be populated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- Friends List -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-gray-900">My Friends</h2>
+          <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+        </div>
+
+        <div id="friendsList" class="space-y-3">
+          <!-- Loading state -->
+          <div id="friendsLoading" class="text-gray-500 text-center py-8">
+            <div
+              class="animate-spin w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full mx-auto mb-2"
+            ></div>
+            Loading friends...
+          </div>
+
+          <!-- No friends message -->
+          <div id="noFriends" class="text-gray-500 text-center py-8 hidden">
+            <svg
+              class="w-12 h-12 text-gray-300 mx-auto mb-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+              ></path>
+            </svg>
+            <p class="text-sm">Start building your network!</p>
+          </div>
+
+          <!-- Friends will be populated here -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Templates -->
+<template id="userSearchTemplate">
+  <div
+    class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:bg-gray-100 transition-colors duration-200"
+  >
+    <div class="flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div
+          class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-semibold text-lg"
+        >
+          <!-- Avatar placeholder -->
+        </div>
+        <div>
+          <p class="text-gray-900 font-medium"></p>
+          <p class="text-gray-500 text-sm"></p>
+        </div>
+      </div>
+      <button
+        class="send-request bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+      >
+        Add Friend
+      </button>
+    </div>
+  </div>
+</template>
+
+<template id="friendRequestTemplate">
+  <div
+    class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:bg-gray-100 transition-colors duration-200"
+  >
+    <div class="flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div
+          class="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center text-white font-semibold text-lg"
+        >
+          <!-- Avatar placeholder -->
+        </div>
+        <div>
+          <p class="text-gray-900 font-medium"></p>
+          <p class="text-gray-500 text-sm"></p>
+        </div>
+      </div>
+      <div class="flex space-x-2">
+        <button
+          class="accept-request bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+        >
+          Accept
+        </button>
+        <button
+          class="reject-request bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="sentFriendRequestTemplate">
+  <div
+    class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:bg-gray-100 transition-colors duration-200"
+  >
+    <div class="flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div
+          class="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center text-white font-semibold text-lg"
+        >
+          <!-- Avatar placeholder -->
+        </div>
+        <div>
+          <p class="text-gray-900 font-medium"></p>
+          <p class="text-gray-500 text-sm"></p>
+        </div>
+      </div>
+      <button
+        class="cancel-request bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+</template>
+
+<template id="friendTemplate">
+  <div
+    class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:bg-gray-100 transition-colors duration-200"
+  >
+    <div class="flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div
+          class="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center text-white font-semibold text-lg"
+        >
+          <!-- Avatar placeholder -->
+        </div>
+        <div class="relative">
+          <p class="text-gray-900 font-medium"></p>
+          <p class="text-gray-500 text-sm"></p>
+          <!-- Online status indicator -->
+          <div class="status-indicator w-3 h-3 bg-gray-400 rounded-full absolute -top-1 -right-1 border-2 border-white"></div>
+        </div>
+      </div>
+      <button
+        class="remove-friend bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+      >
+        Remove
+      </button>
+    </div>
+  </div>
+</template>
+
+<script src="/static/js/friends.js"></script>
+{% endblock %}

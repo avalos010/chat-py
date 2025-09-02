@@ -1,51 +1,234 @@
-{% extends "base.html" %} {% block title %}chat-py{% endblock %} {% block
+{% extends "base.html" %} {% block title %}Chat - chat-py{% endblock %} {% block
 content %}
-<main>
+<main class="min-h-screen bg-gray-50">
   <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
-    <div class="bg-white rounded-lg shadow-sm">
-      <div class="p-6">
-        <div class="flex items-center justify-between mb-4">
-          <h1 class="text-xl font-semibold text-gray-900">Chat Room</h1>
-          <div class="flex items-center space-x-4">
-            <span class="bg-gray-900 px-3 py-1 rounded-full text-sm text-white">
-              {{ active_users }} online
-            </span>
-            {% if user %}
-            <span class="text-gray-700">Welcome, {{ user.username }}!</span>
-            {% endif %}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Conversations List (Unified - Like Messenger) -->
+      <div class="lg:col-span-1">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Conversations</h2>
+            <button
+              id="refreshConversationsButton"
+              class="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Refresh
+            </button>
+          </div>
+          <div id="conversationsList" class="space-y-3">
+            <!-- All conversations will be loaded here -->
+          </div>
+          <div
+            id="noConversations"
+            class="text-center py-8 text-gray-500 hidden"
+          >
+            <p>No conversations yet. Start chatting with someone!</p>
+          </div>
+          <div id="conversationsLoading" class="text-center py-8 text-gray-500">
+            <p>Loading conversations...</p>
           </div>
         </div>
+      </div>
 
+      <!-- Chat Area -->
+      <div class="lg:col-span-2">
+        <!-- No friend selected state -->
         <div
-          id="messages"
-          class="h-[500px] overflow-y-auto mb-4 p-4 space-y-2 bg-gray-50 rounded-lg"
-        ></div>
-        <div class="flex space-x-4">
-          <input
-            type="text"
-            id="messageText"
-            class="flex-1 rounded-md border-0 py-2.5 px-3.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600"
-            placeholder="Type your message..."
-          />
-          <button
-            id="sendButton"
-            class="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+          id="noFriendSelected"
+          class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center"
+        >
+          <svg
+            class="w-16 h-16 text-gray-300 mx-auto mb-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            Send
-          </button>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+            ></path>
+          </svg>
+          <h3 class="text-lg font-medium text-gray-900 mb-2">
+            Select a friend to start chatting
+          </h3>
+          <p class="text-gray-500">
+            Choose someone from your friends list to begin a conversation
+          </p>
+        </div>
+
+        <!-- Chat conversation area (hidden by default) -->
+        <div
+          id="chatConversation"
+          class="bg-white rounded-lg shadow-sm border border-gray-200 hidden"
+        >
+          <!-- Chat Header -->
+          <div class="p-4 border-b border-gray-200 bg-gray-50">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <div
+                  id="selectedFriendAvatar"
+                  class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold"
+                >
+                  <!-- Friend avatar -->
+                </div>
+                <div>
+                  <h2
+                    id="selectedFriendName"
+                    class="text-lg font-semibold text-gray-900"
+                  >
+                    Friend Name
+                  </h2>
+                  <p id="selectedFriendStatus" class="text-sm text-green-600">
+                    ● Online
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-center space-x-4">
+                <span
+                  id="connectionStatus"
+                  class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm"
+                >
+                  Connected
+                </span>
+                <span id="userInfo" class="text-gray-700 text-sm"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Messages Area -->
+          <div class="p-4">
+            <!-- No messages state -->
+            <div id="noMessages" class="text-center py-16">
+              <svg
+                class="w-12 h-12 text-gray-300 mx-auto mb-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                ></path>
+              </svg>
+              <h3 class="text-lg font-medium text-gray-900 mb-2">
+                Start the conversation!
+              </h3>
+              <p class="text-gray-500">Send the first message to your friend</p>
+            </div>
+
+            <!-- Messages container -->
+            <div
+              id="messages"
+              class="h-[400px] overflow-y-auto mb-4 p-4 space-y-3 bg-gray-50 rounded-lg hidden"
+            ></div>
+
+            <!-- Typing indicator for main chat -->
+            <div
+              class="typing-indicator hidden text-sm text-blue-500 italic mb-2"
+            >
+              <span class="typing-username"></span> is typing
+              <span class="typing-dots">
+                <span class="dot">.</span>
+                <span class="dot">.</span>
+                <span class="dot">.</span>
+              </span>
+            </div>
+
+            <!-- Message Input -->
+            <div class="flex space-x-4">
+              <input
+                type="text"
+                id="messageText"
+                class="flex-1 rounded-lg border border-gray-300 py-3 px-4 text-gray-900 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
+                placeholder="Type your message..."
+              />
+              <button
+                id="sendButton"
+                class="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+              >
+                Send
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </main>
+
+<!-- Templates -->
+<template id="unifiedConversationTemplate">
+  <div
+    class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+  >
+    <div
+      class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold"
+    >
+      <span class="conversation-avatar"></span>
+    </div>
+    <div class="flex-1 min-w-0">
+      <p
+        class="text-sm font-medium text-gray-900 truncate conversation-username"
+      ></p>
+      <div class="flex items-center space-x-1">
+        <span class="conversation-message-sender text-xs text-gray-400"></span>
+        <p class="text-xs text-gray-500 truncate conversation-last-message"></p>
+      </div>
+      <div
+        class="conversation-typing-indicator hidden text-xs text-blue-500 italic"
+      >
+        <span class="typing-username"></span> is typing
+        <span class="typing-dots">
+          <span class="dot">.</span>
+          <span class="dot">.</span>
+          <span class="dot">.</span>
+        </span>
+      </div>
+      <div class="conversation-read-status hidden text-xs text-green-500">
+        ✓ Read
+      </div>
+    </div>
+    <div class="flex items-center space-x-2">
+      <div class="status-indicator w-2 h-2 bg-green-500 rounded-full"></div>
+      <div
+        class="unread-badge hidden bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium"
+      >
+        <span class="unread-count"></span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- Message Template -->
+<template id="messageTemplate">
+  <div class="message-item">
+    <div class="flex items-start space-x-3">
+      <div
+        class="w-8 h-8 bg-gray-400 rounded-lg flex items-center justify-center text-white font-semibold text-sm"
+      >
+        <!-- Avatar placeholder -->
+      </div>
+      <div class="flex-1">
+        <div class="flex items-center space-x-2 mb-1">
+          <span class="text-sm font-medium text-gray-900"></span>
+          <span class="text-xs text-gray-500"></span>
+        </div>
+        <div class="bg-white rounded-lg p-3 shadow-sm ring-1 ring-gray-200">
+          <p class="text-gray-900"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
 {% endblock %} {% block scripts %}
-<script
-  type="module"
-  src="{{ url_for('static', path='/js/auth.js') }}?v={{ range(1, 1000) | random }}"
-></script>
-<script
-  type="module"
-  src="{{ url_for('static', path='/js/nav.js') }}?v={{ range(1, 1000) | random }}"
-></script>
-<script src="{{ url_for('static', path='/js/chat.js') }}"></script>
+<script>
+  // Pass conversation_id from backend to frontend if available
+  window.initialConversationId = "{{ conversation_id or '' }}";
+</script>
+<script src="/static/js/chat.js"></script>
 {% endblock %}
