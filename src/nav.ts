@@ -231,7 +231,9 @@ class NavigationManager {
       const token = tokenData.token;
 
       // Connect to WebSocket with token as query parameter
-      this.ws = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
+      const proto = window.location.protocol === "https:" ? "wss" : "ws";
+      const host = window.location.host;
+      this.ws = new WebSocket(`${proto}://${host}/ws?token=${token}`);
 
       this.ws.onopen = () => {
         console.log("Navigation WebSocket connected");
