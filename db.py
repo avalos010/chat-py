@@ -261,7 +261,7 @@ class Database:
         """Get accepted friends for a user"""
         try:
             rows = await self.fetchall("""
-                SELECT 
+                SELECT DISTINCT
                     CASE 
                         WHEN f.user_id = $1 THEN f.friend_id
                         ELSE f.user_id
@@ -275,7 +275,6 @@ class Database:
                     END = u.id
                 )
                 WHERE (f.user_id = $1 OR f.friend_id = $1) AND f.status = 'accepted'
-                GROUP BY friend_id, u.username, u.email
                 ORDER BY u.username
             """, user_id)
             return [

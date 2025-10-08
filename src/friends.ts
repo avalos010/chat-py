@@ -542,6 +542,17 @@ class FriendsManager {
       statusIndicator.title = `${friend.username} is ${status}`;
     }
 
+    // Setup message friend button
+    const messageButton = element.querySelector(
+      ".message-friend"
+    ) as HTMLButtonElement;
+    if (messageButton) {
+      messageButton.addEventListener("click", () => {
+        // Redirect to chat page with this friend
+        window.location.href = `/chat/${friend.friend_id}`;
+      });
+    }
+
     // Setup remove friend button
     const removeButton = element.querySelector(
       ".remove-friend"

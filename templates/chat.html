@@ -22,10 +22,29 @@ content %}
             id="noConversations"
             class="text-center py-8 text-gray-500 hidden"
           >
-            <p>No conversations yet. Start chatting with someone!</p>
+            <p>No conversations yet. Start chatting with a friend!</p>
           </div>
           <div id="conversationsLoading" class="text-center py-8 text-gray-500">
             <p>Loading conversations...</p>
+          </div>
+
+          <!-- All Friends Section -->
+          <div class="mt-6 pt-4 border-t border-gray-200">
+            <h3 class="text-sm font-semibold text-gray-600 mb-3">
+              All Friends
+            </h3>
+            <div id="allFriendsList" class="space-y-2">
+              <!-- Friends without conversations will be listed here -->
+            </div>
+            <div
+              id="noFriendsInChat"
+              class="text-center py-4 text-gray-400 text-sm hidden"
+            >
+              No friends yet.
+              <a href="/friends" class="text-penn-red hover:underline"
+                >Add friends</a
+              >
+            </div>
           </div>
         </div>
       </div>

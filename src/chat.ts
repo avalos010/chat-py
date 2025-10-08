@@ -52,6 +52,9 @@ class ChatApp {
   private lastTypingTime: number = 0;
   private pendingReadReceipts: Set<string> = new Set();
 
+  // Online users tracking
+  private onlineUsers: Set<number> = new Set();
+
   // Current user info
   private currentUserId: number | null = null;
 
@@ -107,6 +110,9 @@ class ChatApp {
 
     // Load conversations
     await this.loadUnifiedConversations();
+
+    // Load all friends (for starting new conversations)
+    await this.loadAllFriends();
 
     // Setup event listeners
     this.setupEventListeners();
@@ -403,12 +409,18 @@ class ChatApp {
       "#conversationsList .flex.items-center.space-x-3.p-3.rounded-lg"
     );
     conversationItems.forEach((el) => {
-      const usernameEl = el.querySelector(".conversation-username") as HTMLElement | null;
-      const unreadBadge = el.querySelector(".unread-badge") as HTMLElement | null;
+      const usernameEl = el.querySelector(
+        ".conversation-username"
+      ) as HTMLElement | null;
+      const unreadBadge = el.querySelector(
+        ".unread-badge"
+      ) as HTMLElement | null;
       if (!usernameEl || !unreadBadge) return;
       if (usernameEl.textContent === this.selectedFriend?.username) {
         if (count > 0) {
-          const unreadCount = unreadBadge.querySelector(".unread-count") as HTMLElement | null;
+          const unreadCount = unreadBadge.querySelector(
+            ".unread-count"
+          ) as HTMLElement | null;
           if (unreadCount) unreadCount.textContent = String(count);
           unreadBadge.classList.remove("hidden");
         } else {
@@ -955,9 +967,12 @@ class ChatApp {
     const el = this.connectionStatusElement;
     el.textContent = status;
     el.classList.remove(
-      "bg-green-100","text-green-700",
-      "bg-red-100","text-red-700",
-      "bg-yellow-100","text-yellow-700"
+      "bg-green-100",
+      "text-green-700",
+      "bg-red-100",
+      "text-red-700",
+      "bg-yellow-100",
+      "text-yellow-700"
     );
     classNames
       .split(/\s+/)
@@ -1063,11 +1078,22 @@ class ChatApp {
     // Update status indicators in conversations list
     const username = data.username;
     const status = data.status; // "online" or "offline"
+    const userId = data.user_id;
 
     console.log(`User ${username} is now ${status}`);
 
+    // Update onlineUsers set
+    if (status === "online") {
+      this.onlineUsers.add(userId);
+    } else {
+      this.onlineUsers.delete(userId);
+    }
+
     // Update status in conversations list
     this.updateUserStatusInConversations(username, status);
+
+    // Update status in "All Friends" list
+    this.updateAllFriendsOnlineStatus();
 
     // Update status in currently selected friend header if applicable
     if (this.selectedFriend && this.selectedFriend.username === username) {
@@ -1225,6 +1251,136 @@ class ChatApp {
     if (this.chatConversationElement) {
       this.chatConversationElement.classList.add("hidden");
     }
+  }
+
+  private async loadAllFriends(): Promise<void> {
+    try {
+      // Load friends list
+      const response = await fetch("/api/friends");
+      if (response.ok) {
+        const data = await response.json();
+
+        // Load online status first
+        const statusResponse = await fetch("/api/friends/online-status");
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          statusData.friends_status?.forEach((friend: any) => {
+            if (friend.status === "online") {
+              this.onlineUsers.add(friend.friend_id);
+            }
+          });
+        }
+
+        // Then display friends with status
+        this.displayAllFriends(data.friends);
+      } else {
+        console.error("Failed to load friends");
+      }
+    } catch (error) {
+      console.error("Error loading friends:", error);
+    }
+  }
+
+  private displayAllFriends(friends: any[]): void {
+    const container = document.getElementById("allFriendsList");
+    const noFriends = document.getElementById("noFriendsInChat");
+
+    if (!container || !noFriends) return;
+
+    if (friends.length === 0) {
+      noFriends.classList.remove("hidden");
+      return;
+    }
+
+    noFriends.classList.add("hidden");
+    container.innerHTML = "";
+
+    friends.forEach((friend) => {
+      const friendElement = document.createElement("div");
+      friendElement.className =
+        "flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors";
+      friendElement.setAttribute("data-friend-id", friend.friend_id.toString());
+
+      const isOnline = this.onlineUsers.has(friend.friend_id);
+      const statusColor = isOnline ? "bg-green-500" : "bg-gray-400";
+
+      friendElement.innerHTML = `
+        <div class="flex items-center space-x-3">
+          <div class="relative">
+            <div class="w-8 h-8 bg-gradient-to-r from-penn-red to-space-cadet rounded-full flex items-center justify-center text-white font-semibold text-sm">
+              ${friend.username.charAt(0).toUpperCase()}
+            </div>
+            <div class="friend-status-dot absolute -bottom-0.5 -right-0.5 w-3 h-3 ${statusColor} rounded-full border-2 border-white"></div>
+          </div>
+          <span class="text-sm font-medium text-gray-700">${
+            friend.username
+          }</span>
+        </div>
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+      `;
+
+      friendElement.addEventListener("click", () => {
+        // Select this friend for chatting
+        this.selectFriendById(friend.friend_id, friend.username, friend.email);
+      });
+
+      container.appendChild(friendElement);
+    });
+
+    // Update online status in real-time
+    this.updateAllFriendsOnlineStatus();
+  }
+
+  private updateAllFriendsOnlineStatus(): void {
+    const container = document.getElementById("allFriendsList");
+    if (!container) return;
+
+    const friendElements = container.querySelectorAll("[data-friend-id]");
+    friendElements.forEach((element) => {
+      const friendId = parseInt(element.getAttribute("data-friend-id") || "0");
+      const statusDot = element.querySelector(".friend-status-dot");
+
+      if (statusDot) {
+        const isOnline = this.onlineUsers.has(friendId);
+        statusDot.className = `friend-status-dot absolute -bottom-0.5 -right-0.5 w-3 h-3 ${
+          isOnline ? "bg-green-500" : "bg-gray-400"
+        } rounded-full border-2 border-white`;
+      }
+    });
+  }
+
+  private selectFriendById(
+    friendId: number,
+    username: string,
+    email: string
+  ): void {
+    // Create a friend object and select it
+    const isOnline = this.onlineUsers.has(friendId);
+    const status = isOnline ? "online" : "offline";
+
+    // Generate conversation ID for this friend pair
+    const user_ids = [this.currentUserId || 0, friendId].sort();
+    const conversationId = `conv_${user_ids[0]}_${user_ids[1]}`;
+
+    this.selectedFriend = {
+      friend_id: friendId,
+      conversation_id: conversationId,
+      username: username,
+      email: email,
+      status: status,
+      unread_count: 0,
+    };
+
+    // Update URL
+    this.updateURLForConversation(conversationId);
+
+    // Show chat UI
+    this.showChatConversation();
+
+    // Load conversation (will show empty state if no messages)
+    this.loadConversation(friendId);
   }
 }
 
