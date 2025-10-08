@@ -548,11 +548,26 @@ async def send_friend_request(request: Request, friend_data: FriendRequestData):
         # Get recipient user info for WebSocket notification
         recipient_user = await db.get_user_by_id(friend_data.friend_id)
         if recipient_user:
-            # Broadcast friend request update via WebSocket
-            await broadcast_friend_request_update(
-                user.id, user.username, 
-                recipient_user.id, recipient_user.username, 
-                "sent"
+            # Notify sender that request was sent
+            await send_notification_to_user(
+                user.id,
+                {
+                    "type": "friend_request_update",
+                    "request_type": "sent",
+                    "recipient_username": recipient_user.username,
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+            # Notify recipient they received a request
+            await send_notification_to_user(
+                recipient_user.id,
+                {
+                    "type": "friend_request_update",
+                    "request_type": "received",
+                    "sender_username": user.username,
+                    "sender_id": user.id,
+                    "timestamp": datetime.now().isoformat()
+                }
             )
         return {"message": "Friend request sent successfully"}
     else:
@@ -589,11 +604,15 @@ async def reject_friend_request(request: Request, friend_data: FriendRequestData
         # Get sender user info for WebSocket notification
         sender_user = await db.get_user_by_id(friend_data.friend_id)
         if sender_user:
-            # Broadcast friend request update via WebSocket
-            await broadcast_friend_request_update(
-                sender_user.id, sender_user.username, 
-                user.id, user.username, 
-                "rejected"
+            # Only notify the person who sent the request (they got rejected)
+            await send_notification_to_user(
+                sender_user.id,
+                {
+                    "type": "friend_request_update",
+                    "request_type": "rejected",
+                    "sender_username": user.username,  # Person who rejected
+                    "timestamp": datetime.now().isoformat()
+                }
             )
         return {"message": "Friend request rejected"}
     else:
@@ -886,6 +905,23 @@ async def broadcast_user_status_update(user_id: int, username: str, status: str)
         if broken_conn in connections:
             connections.remove(broken_conn)
 
+
+async def send_notification_to_user(user_id: int, notification: dict):
+    """Send a notification to a specific user via WebSocket"""
+    connections_copy = connections.copy()
+    broken_connections = []
+    
+    for conn in connections_copy:
+        if conn["user_id"] == user_id:
+            try:
+                await conn["websocket"].send_text(json.dumps(notification))
+            except:
+                broken_connections.append(conn)
+    
+    # Remove broken connections
+    for broken_conn in broken_connections:
+        if broken_conn in connections:
+            connections.remove(broken_conn)
 
 async def broadcast_friend_request_update(sender_id: int, sender_username: str, recipient_id: int, recipient_username: str, request_type: str):
     """Broadcast friend request updates to relevant users"""

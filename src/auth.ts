@@ -1,3 +1,5 @@
+import Toast from "./toast.js";
+
 console.log("=== AUTH.TS SCRIPT LOADING ===");
 
 interface LoginData {
@@ -57,7 +59,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const password = formData.get("password");
 
     if (!username || !password) {
-      alert("Username and password are required.");
+      Toast.error("Username and password are required.");
       return;
     }
 
@@ -90,16 +92,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (response.ok) {
         const data = await response.json();
         console.log("Login successful, redirecting to:", data.redirect_url);
-        window.location.replace(data.redirect_url);
+        Toast.success("Login successful!");
+        setTimeout(() => {
+          window.location.replace(data.redirect_url);
+        }, 500);
       } else {
         const errorData = await response.json();
-        alert(
+        Toast.error(
           errorData.detail || "Login failed. Please check your credentials."
         );
       }
     } catch (error) {
       console.error("Login error:", error);
-      alert("An error occurred during login. Please try again.");
+      Toast.error("An error occurred during login. Please try again.");
     } finally {
       if (submitButton) {
         submitButton.disabled = false;
@@ -122,19 +127,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Validate signup data
     if (!signupData.username || signupData.username.trim() === "") {
-      alert("Username is required.");
+      Toast.error("Username is required.");
       return;
     }
     if (!signupData.email || signupData.email.trim() === "") {
-      alert("Email is required.");
+      Toast.error("Email is required.");
       return;
     }
     if (!signupData.password || signupData.password.length < 6) {
-      alert("Password must be at least 6 characters long.");
+      Toast.error("Password must be at least 6 characters long.");
       return;
     }
     if (signupData.password !== signupData.confirmPassword) {
-      alert("Passwords do not match.");
+      Toast.error("Passwords do not match.");
       return;
     }
 
@@ -157,16 +162,18 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
 
       if (response.ok) {
-        alert("Signup successful! You can now log in.");
-        window.location.href = "/login";
+        Toast.success("Signup successful! Redirecting to login...");
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 1000);
       } else {
         const errorData = await response.text();
         console.error("Signup failed:", errorData);
-        alert("Signup failed. Please try again.");
+        Toast.error("Signup failed. Please try again.");
       }
     } catch (error) {
       console.error("Signup error:", error);
-      alert("An error occurred during signup. Please try again.");
+      Toast.error("An error occurred during signup. Please try again.");
     } finally {
       if (submitButton) {
         submitButton.disabled = false;

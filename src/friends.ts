@@ -172,7 +172,7 @@ class FriendsManager {
       });
 
       if (response.ok) {
-        alert("Friend request sent successfully!");
+        // Toast notification is handled by WebSocket notification system
         // Refresh both friend requests and sent friend requests
         this.loadFriendRequests();
         this.loadSentFriendRequests();
@@ -185,11 +185,10 @@ class FriendsManager {
         if (searchInput) searchInput.value = "";
       } else {
         const errorData = await response.json();
-        alert(`Failed to send friend request: ${errorData.detail}`);
+        console.error(`Failed to send friend request: ${errorData.detail}`);
       }
     } catch (error) {
       console.error("Error sending friend request:", error);
-      alert("An error occurred while sending the friend request");
     }
   }
 
@@ -397,17 +396,16 @@ class FriendsManager {
       });
 
       if (response.ok) {
-        alert("Friend request accepted!");
+        // Toast notification is handled by WebSocket notification system
         // Refresh both lists
         this.loadFriendRequests();
         this.loadFriendsList();
       } else {
         const errorData = await response.json();
-        alert(`Failed to accept friend request: ${errorData.detail}`);
+        console.error(`Failed to accept friend request: ${errorData.detail}`);
       }
     } catch (error) {
       console.error("Error accepting friend request:", error);
-      alert("An error occurred while accepting the friend request");
     }
   }
 
@@ -422,16 +420,14 @@ class FriendsManager {
       });
 
       if (response.ok) {
-        alert("Friend request rejected");
-        // Refresh friend requests
+        // Refresh friend requests - no alert needed, action is clear from UI update
         this.loadFriendRequests();
       } else {
         const errorData = await response.json();
-        alert(`Failed to reject friend request: ${errorData.detail}`);
+        console.error(`Failed to reject friend request: ${errorData.detail}`);
       }
     } catch (error) {
       console.error("Error rejecting friend request:", error);
-      alert("An error occurred while rejecting the friend request");
     }
   }
 
@@ -447,16 +443,14 @@ class FriendsManager {
       });
 
       if (response.ok) {
-        alert("Friend request canceled successfully");
-        // Refresh sent friend requests
+        // Refresh sent friend requests - no alert needed, action is clear from UI update
         this.loadSentFriendRequests();
       } else {
         const errorData = await response.json();
-        alert(`Failed to cancel friend request: ${errorData.detail}`);
+        console.error(`Failed to cancel friend request: ${errorData.detail}`);
       }
     } catch (error) {
       console.error("Error canceling friend request:", error);
-      alert("An error occurred while canceling the friend request");
     }
   }
 
