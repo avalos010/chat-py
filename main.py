@@ -308,8 +308,7 @@ async def signup(user_create: UserCreate):
         hashed_password = get_password_hash(user_create.password)
 
         # Create a new user in the database
-        await db.execute("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", (user_create.username, user_create.email, hashed_password))
-        await db.commit()
+        await db.create_user(user_create.username, user_create.email, hashed_password)
 
         # Return a redirect to the login page
         return RedirectResponse(url="/login", status_code=302)
