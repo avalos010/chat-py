@@ -35,90 +35,15 @@ async function checkServerAuth(): Promise<boolean> {
   return false;
 }
 
-// Function to redirect to login if not authenticated
-async function redirectToLoginIfNotAuthenticated(): Promise<void> {
-  try {
-    const isAuth = await checkServerAuth();
-    if (!isAuth) {
-      window.location.href = "/login";
-    }
-  } catch (error) {
-    console.error("Auth check failed:", error);
-    window.location.href = "/login";
-  }
-}
-
-// Function to protect routes that require authentication
-async function protectRoute(): Promise<void> {
-  try {
-    const isAuth = await checkServerAuth();
-    if (!isAuth) {
-      window.location.href = "/login";
-      return;
-    }
-  } catch (error) {
-    console.error("Route protection failed:", error);
-    window.location.href = "/login";
-  }
-}
-
-// Function to handle page load authentication
-async function handlePageLoadAuth(): Promise<void> {
-  try {
-    const isAuth = await checkServerAuth();
-
-    if (isAuth) {
-      // If user is authenticated and on login/signup pages, redirect to chat
-      if (
-        window.location.pathname === "/login" ||
-        window.location.pathname === "/signup"
-      ) {
-        // Add a small delay to prevent immediate redirect after logout
-        setTimeout(() => {
-          window.location.href = "/chat";
-        }, 200);
-        return;
-      }
-    } else {
-      // Only redirect to login if not already there and not on home page
-      if (
-        window.location.pathname !== "/login" &&
-        window.location.pathname !== "/"
-      ) {
-        window.location.href = "/login";
-      }
-    }
-  } catch (error) {
-    console.error("Server auth check failed:", error);
-  }
-}
+// No longer need client-side redirects - server handles all authentication redirects
 
 // Export for use in other modules
-export {
-  makeAuthenticatedRequest,
-  checkServerAuth,
-  redirectToLoginIfNotAuthenticated,
-  protectRoute,
-};
+export { makeAuthenticatedRequest, checkServerAuth };
 
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("DOM Content Loaded - Auth script is running!");
 
-  // Check authentication status when page loads
-  handlePageLoadAuth();
-
-  // Special handling for chat pages (including subpaths) to prevent flash
-  if (window.location.pathname === "/chat" || window.location.pathname.startsWith("/chat/")) {
-    try {
-      const response = await fetch("/check-auth");
-      if (!response.ok) {
-        window.location.href = "/login";
-      }
-    } catch (error) {
-      console.error("Chat auth check failed:", error);
-      window.location.href = "/login";
-    }
-  }
+  // Server now handles all redirects - no client-side redirect checks needed
 
   const loginForm = document.getElementById("loginForm");
   const signupForm = document.getElementById("signupForm");
