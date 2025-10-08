@@ -1,34 +1,31 @@
 {% extends "base.html" %} {% block title %}Sign Up - chat-py{% endblock %} {%
 block content %}
-<div
-  class="min-h-screen flex bg-gradient-to-br from-space-cadet to-raisin-black"
->
+<div class="min-h-screen flex bg-gray-50">
   <!-- Left side - Hero section -->
-  <div class="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-    <div
-      class="absolute inset-0 bg-gradient-to-br from-penn-red to-space-cadet opacity-90"
-    ></div>
+  <div
+    class="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-space-cadet to-raisin-black"
+  >
     <div class="relative z-10 flex flex-col justify-center px-12 text-white">
       <div class="max-w-lg">
-        <h1 class="text-4xl font-bold mb-6">Join the chat-py community</h1>
-        <p class="text-xl text-sunset mb-8">
+        <h1 class="text-4xl font-bold mb-6 text-sunset">
+          Join the chat-py community
+        </h1>
+        <p class="text-xl text-gray-200 mb-8">
           Start your journey with us today. Create meaningful connections and
           collaborate with people around the world.
         </p>
         <div class="space-y-4">
           <div class="flex items-center space-x-3">
             <div class="w-2 h-2 bg-sunset rounded-full"></div>
-            <span class="text-floral-white"
-              >Create unlimited conversations</span
-            >
+            <span class="text-gray-200">Create unlimited conversations</span>
           </div>
           <div class="flex items-center space-x-3">
             <div class="w-2 h-2 bg-sunset rounded-full"></div>
-            <span class="text-floral-white">Connect with global community</span>
+            <span class="text-gray-200">Connect with global community</span>
           </div>
           <div class="flex items-center space-x-3">
             <div class="w-2 h-2 bg-sunset rounded-full"></div>
-            <span class="text-floral-white">Free forever</span>
+            <span class="text-gray-200">Free forever</span>
           </div>
         </div>
       </div>
@@ -37,7 +34,7 @@ block content %}
 
   <!-- Right side - Signup form -->
   <div
-    class="flex-1 flex flex-col justify-center px-6 py-12 lg:px-12 bg-floral-white"
+    class="flex-1 flex flex-col justify-center px-6 py-12 lg:px-12 bg-gray-50"
   >
     <div class="sm:mx-auto sm:w-full sm:max-w-md">
       <div class="text-center mb-8">
@@ -125,7 +122,7 @@ block content %}
           <div class="pt-2">
             <button
               type="submit"
-              class="flex w-full justify-center rounded-xl px-3 py-3 text-sm font-semibold leading-6 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] bg-gradient-to-r from-penn-red to-space-cadet"
+              class="flex w-full justify-center rounded-xl px-3 py-3 text-sm font-semibold leading-6 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] bg-gradient-to-r from-penn-red to-space-cadet hover:from-penn-red/90 hover:to-space-cadet/90"
             >
               Create Account
             </button>
@@ -150,9 +147,5 @@ block content %}
 <script
   type="module"
   src="{{ url_for('static', path='/js/auth.js') }}?v={{ range(1, 1000) | random }}"
-></script>
-<script
-  type="module"
-  src="{{ url_for('static', path='/js/nav.js') }}?v={{ range(1, 1000) | random }}"
 ></script>
 {% endblock %}

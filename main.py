@@ -4,7 +4,7 @@ from fastapi import Body, FastAPI, WebSocket, Depends, HTTPException, status, Re
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from typing import Optional, List
+from typing import Optional, List, Callable
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError
@@ -20,6 +20,7 @@ from utils.security import (
     verify_password,
     get_password_hash
 )
+from functools import wraps
 
 from db import Database
 import logging
@@ -35,6 +36,60 @@ app = FastAPI(debug=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 db = Database()
+
+# Authentication decorator for routes
+def require_auth(redirect_to: str = "/login"):
+    """Decorator to require authentication for routes"""
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(request: Request, *args, **kwargs):
+            user = getattr(request.state, 'user', None)
+            
+            # Check cookies if not in state
+            if not user:
+                token = request.cookies.get("auth_token")
+                if token:
+                    try:
+                        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                        username = payload.get("sub")
+                        if username:
+                            user = await get_user(db, username)
+                    except JWTError:
+                        pass
+            
+            if not user:
+                return RedirectResponse(url=redirect_to, status_code=302)
+            
+            # Add user to kwargs for the route handler
+            return await func(request, *args, user=user, **kwargs)
+        return wrapper
+    return decorator
+
+def redirect_if_authenticated(redirect_to: str = "/chat"):
+    """Decorator to redirect authenticated users"""
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(request: Request, *args, **kwargs):
+            user = getattr(request.state, 'user', None)
+            
+            # Check cookies if not in state
+            if not user:
+                token = request.cookies.get("auth_token")
+                if token:
+                    try:
+                        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                        username = payload.get("sub")
+                        if username:
+                            user = await get_user(db, username)
+                    except JWTError:
+                        pass
+            
+            if user:
+                return RedirectResponse(url=redirect_to, status_code=302)
+            
+            return await func(request, *args, **kwargs)
+        return wrapper
+    return decorator
 
 @app.on_event("startup")
 async def on_startup():
@@ -202,7 +257,9 @@ async def chat_conversation_route(request: Request, conversation_id: str):
     })
 
 @app.get("/login")
+@redirect_if_authenticated()
 async def login_page(request: Request):
+    """Serve the login page - redirect if already authenticated"""
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
@@ -229,7 +286,9 @@ async def login_user(response: Response, form_data: OAuth2PasswordRequestForm = 
 
 
 @app.get("/signup")
-async def login(request: Request):
+@redirect_if_authenticated()
+async def signup_page(request: Request):
+    """Serve the signup page - redirect if already authenticated"""
     return templates.TemplateResponse("signup.html", {"request": request})
 
 

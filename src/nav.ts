@@ -31,6 +31,7 @@ class NavigationManager {
     messages: 0,
     friendRequests: 0,
   };
+  private conversationMessageCounts: Record<string, number> = {};
 
   constructor() {
     this.authStatusElement = document.getElementById("auth-status");
@@ -52,9 +53,7 @@ class NavigationManager {
 
     this.setupEventListeners();
 
-    // Initialize WebSocket if authenticated
-    // With cookie-based auth, we'll check auth status from server
-    this.initializeWebSocket();
+    // Don't initialize WebSocket here - it will be initialized in updateNavigation if authenticated
   }
 
   private hideProtectedRoutes(): void {
@@ -107,6 +106,7 @@ class NavigationManager {
           this.initializeWebSocket();
         }
       } else {
+        // 401 is expected when not logged in - don't spam console
         this.showUnauthenticatedState();
 
         // Close WebSocket if not authenticated
@@ -116,7 +116,10 @@ class NavigationManager {
         }
       }
     } catch (error) {
-      console.error("Auth check failed:", error);
+      // Only log unexpected errors, not auth failures
+      if (error instanceof TypeError || error instanceof SyntaxError) {
+        console.error("Navigation auth check error:", error);
+      }
       this.showUnauthenticatedState();
 
       // Close WebSocket on error
@@ -434,22 +437,12 @@ class NavigationManager {
     this.updateNavigation();
   }
 
-  // Clear notifications for a specific conversation
-  // Add field near notificationCounts
-  // private conversationMessageCounts: Record<string, number> = {};
-  // Update handlers where messages arrive:
-  // this.conversationMessageCounts[data.conversation_id] = (this.conversationMessageCounts[data.conversation_id] || 0) + 1;
-  // this.notificationCounts.messages = Object.values(this.conversationMessageCounts).reduce((a,b)=>a+b,0);
-
   private clearConversationNotifications(conversationId: string): void {
     // Reset count for this conversation and update global badge
-    // Ensure the map exists
-    // @ts-ignore - declared alongside notificationCounts
-    if (!this.conversationMessageCounts) this.conversationMessageCounts = {};
-    // @ts-ignore
     this.conversationMessageCounts[conversationId] = 0;
-    // @ts-ignore
-    this.notificationCounts.messages = Object.values(this.conversationMessageCounts).reduce((a, b) => a + b, 0);
+    this.notificationCounts.messages = Object.values(
+      this.conversationMessageCounts
+    ).reduce((a, b) => a + b, 0);
     this.updateChatNotificationBadge();
   }
 }
@@ -457,11 +450,7 @@ class NavigationManager {
 // Initialize navigation when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
   const navManager = new NavigationManager();
-
-  // Force refresh navigation state after a short delay to handle any edge cases
-  setTimeout(() => {
-    navManager.refresh();
-  }, 200);
+  // Navigation is already updated in initialize() - no need to call refresh again
 });
 
 // Export for use in other modules

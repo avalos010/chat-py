@@ -1,14 +1,8 @@
 {% extends "base.html" %} {% block title %}About - chat-py{% endblock %} {%
 block content %}
-<main
-  class="min-h-screen bg-gradient-to-br from-floral-white via-white to-sunset/20"
->
+<main class="min-h-screen bg-gray-50">
   <!-- Hero Section -->
   <div class="relative overflow-hidden">
-    <div
-      class="absolute inset-0 bg-gradient-to-r from-space-cadet/10 to-penn-red/10"
-    ></div>
-
     <!-- Particle Background Container -->
     <div id="particle-background" class="absolute inset-0 w-full h-full"></div>
 
@@ -409,10 +403,6 @@ block content %}
 <script
   type="module"
   src="{{ url_for('static', path='/js/auth.js') }}?v={{ range(1, 1000) | random }}"
-></script>
-<script
-  type="module"
-  src="{{ url_for('static', path='/js/nav.js') }}?v={{ range(1, 1000) | random }}"
 ></script>
 <script
   type="module"
