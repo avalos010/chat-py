@@ -57,6 +57,7 @@ class ChatApp {
 
   // Current user info
   private currentUserId: number | null = null;
+  private currentUsername: string | null = null;
 
   constructor() {
     this.messageInput = document.getElementById(
@@ -141,7 +142,13 @@ class ChatApp {
       if (response.ok) {
         const userData = await response.json();
         this.currentUserId = userData.id;
-        console.log("Current user ID:", this.currentUserId);
+        this.currentUsername = userData.username;
+        console.log(
+          "Current user:",
+          this.currentUsername,
+          "ID:",
+          this.currentUserId
+        );
       } else {
         console.error("Failed to get current user info");
       }
@@ -484,7 +491,10 @@ class ChatApp {
         const messages = data.conversation.map((msg: any) => ({
           text: msg.message_text,
           timestamp: msg.timestamp,
-          sender: msg.sender_username,
+          sender:
+            msg.sender_username === this.currentUsername
+              ? "You"
+              : msg.sender_username,
           messageId: msg.id.toString(),
           isRead: msg.is_read,
         }));
@@ -524,26 +534,43 @@ class ChatApp {
   }
 
   private createMessageElement(message: ChatMessage): HTMLElement {
-    const template = document.getElementById(
-      "messageTemplate"
-    ) as HTMLTemplateElement;
-    if (!template) return document.createElement("div");
+    const isOwnMessage = message.sender === "You";
 
-    const clone = template.content.cloneNode(true) as DocumentFragment;
-    const element = clone.firstElementChild as HTMLElement;
-    if (!element) return document.createElement("div");
+    // Create message wrapper
+    const wrapper = document.createElement("div");
+    wrapper.className = `flex mb-4 ${
+      isOwnMessage ? "justify-end" : "justify-start"
+    }`;
 
-    // Set message content
-    const username = element.querySelector("span:first-of-type") as HTMLElement;
-    const timestamp = element.querySelector("span:last-of-type") as HTMLElement;
-    const messageText = element.querySelector("p") as HTMLElement;
+    // Create message bubble
+    const bubble = document.createElement("div");
+    bubble.className = `max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
+      isOwnMessage
+        ? "bg-blue-500 text-white rounded-br-none"
+        : "bg-gray-200 text-gray-900 rounded-bl-none"
+    }`;
 
-    if (username) username.textContent = message.sender;
-    if (timestamp)
-      timestamp.textContent = new Date(message.timestamp).toLocaleTimeString();
-    if (messageText) messageText.textContent = message.text;
+    // Create message text
+    const text = document.createElement("p");
+    text.className = "text-sm break-words";
+    text.textContent = message.text;
 
-    return element;
+    // Create timestamp
+    const timestamp = document.createElement("span");
+    timestamp.className = `text-xs mt-1 block ${
+      isOwnMessage ? "text-gray-200" : "text-gray-500"
+    }`;
+    timestamp.textContent = new Date(message.timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    // Assemble
+    bubble.appendChild(text);
+    bubble.appendChild(timestamp);
+    wrapper.appendChild(bubble);
+
+    return wrapper;
   }
 
   private showNoMessages(): void {
