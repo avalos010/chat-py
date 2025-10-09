@@ -138,6 +138,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       Toast.error("Password must be at least 6 characters long.");
       return;
     }
+    if (signupData.password.length > 72) {
+      Toast.error("Password must be less than 72 characters.");
+      return;
+    }
     if (signupData.password !== signupData.confirmPassword) {
       Toast.error("Passwords do not match.");
       return;
