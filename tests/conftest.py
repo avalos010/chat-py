@@ -63,7 +63,7 @@ async def test_user(test_db: Database) -> dict:
     
     username = f"testuser_{unique_id}"
     email = f"test_{unique_id}@example.com"
-    password = "testpassword123"
+    password = os.getenv("TEST_USER_PASSWORD", "testpassword123")
     
     hashed_password = get_password_hash(password)
     await test_db.create_user(username, email, hashed_password)
@@ -102,7 +102,7 @@ async def two_users(test_db: Database) -> tuple[dict, dict]:
     user1_data = {
         "username": f"user1_{unique_id}",
         "email": f"user1_{unique_id}@example.com",
-        "password": "password123"
+        "password": os.getenv("TEST_USER_PASSWORD_ALT", "password123")
     }
     hashed_password1 = get_password_hash(user1_data["password"])
     await test_db.create_user(user1_data["username"], user1_data["email"], hashed_password1)
@@ -111,7 +111,7 @@ async def two_users(test_db: Database) -> tuple[dict, dict]:
     user2_data = {
         "username": f"user2_{unique_id}", 
         "email": f"user2_{unique_id}@example.com",
-        "password": "password123"
+        "password": os.getenv("TEST_USER_PASSWORD_ALT", "password123")
     }
     hashed_password2 = get_password_hash(user2_data["password"])
     await test_db.create_user(user2_data["username"], user2_data["email"], hashed_password2)

@@ -40,6 +40,8 @@ jobs:
       - name: Run Python tests
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+          TEST_USER_PASSWORD_ALT: ${{ secrets.TEST_USER_PASSWORD_ALT }}
         run: |
           echo "🐍 Running Python tests..."
           pytest tests/unit/ tests/integration/ -v
