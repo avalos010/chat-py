@@ -298,6 +298,14 @@ test_*.py
 *_test.py
 !/tests/test_*.py
 !/tests/*_test.py
+!/tests/unit/test_*.py
+!/tests/unit/*_test.py
+!/tests/integration/test_*.py
+!/tests/integration/*_test.py
+!/tests/e2e/test_*.py
+!/tests/e2e/*_test.py
+!/tests/fixtures/test_*.py
+!/tests/fixtures/*_test.py
 
 # IDE files
 .vscode/

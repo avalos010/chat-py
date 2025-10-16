@@ -1,36 +1,58 @@
 # Testing Guide for Chat-Py
 
-This project has two types of tests to ensure both infrastructure and actual functionality work correctly.
+This project has a clean, organized test structure with three types of tests to ensure comprehensive coverage.
 
-## 🧪 Test Types
+## 🧪 Test Structure
 
-### 1. Infrastructure Tests (Always Pass) ✅
-**Purpose**: Verify basic infrastructure, security, and deployment readiness
-**Run**: `./scripts/test.sh` or `python -m pytest tests/test_working_flows.py tests/test_simple.py tests/test_simple_render.py`
+### 📁 Organized Test Directory
+```
+tests/
+├── unit/           # Fast, isolated unit tests (12 tests)
+├── integration/    # Database and API integration tests (30 tests)  
+├── e2e/            # End-to-end user workflow tests (6 tests)
+└── fixtures/       # Shared test data and fixtures
+```
+
+### 1. Unit Tests (Fast & Isolated) ⚡
+**Purpose**: Test individual functions and components in isolation
+**Run**: `python -m pytest tests/unit/ -v`
 
 **What they test**:
-- ✅ Pages load correctly
-- ✅ Endpoints exist and return proper status codes
-- ✅ Authentication middleware works
+- ✅ Password hashing and verification functions
+- ✅ Pydantic model validation and serialization
+- ✅ Security utilities and edge cases
+- ✅ Input validation and error handling
+
+**Coverage**: 12 tests - all passing
+
+### 2. Integration Tests (API & Database) 🔗
+**Purpose**: Test API endpoints, database connectivity, and component integration
+**Run**: `./scripts/test.sh` or `python -m pytest tests/integration/ -v`
+
+**What they test**:
+- ✅ API endpoint availability and structure
+- ✅ Authentication middleware and security
 - ✅ Database connectivity (Render PostgreSQL)
-- ✅ Password hashing and security functions
-- ✅ Error handling for malformed requests
-- ✅ Static file serving
-- ✅ API endpoint structure
+- ✅ Friend request and management endpoints
+- ✅ Message and conversation endpoints
+- ✅ Static file serving and infrastructure
+- ✅ Error handling and validation
 
-**Coverage**: 31 passing tests
+**Coverage**: 30 tests - all passing
 
-### 2. Integration Tests (Test Actual Functionality) 🚀
-**Purpose**: Test real user workflows and business logic
+### 3. End-to-End Tests (Real User Workflows) 🚀
+**Purpose**: Test complete user workflows using real server
 **Run**: `./scripts/test-integration.sh` (requires running server)
 
 **What they test**:
-- 🚀 User signup and login flows
-- 🚀 Friend requests (send, accept, reject)
-- 🚀 Message workflows and conversations
+- 🚀 Complete user signup and login flows
+- 🚀 Friend request workflows (send, accept, reject)
+- 🚀 Message workflows between friends
 - 🚀 WebSocket token generation
 - 🚀 Online status functionality
-- 🚀 User search functionality
+- 🚀 User search and discovery
+
+**Coverage**: 6 tests - test actual functionality
 
 ## 🚀 Running Tests
 

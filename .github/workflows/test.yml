@@ -42,7 +42,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           echo "🐍 Running Python tests..."
-          pytest tests/test_simple_render.py tests/test_simple.py tests/test_working_flows.py -v
+          pytest tests/unit/ tests/integration/ -v
 
       - name: Run JavaScript tests
         run: |

@@ -34,7 +34,7 @@ echo "  - Online status"
 echo ""
 
 # Run the integration tests
-python -m pytest tests/test_integration_functionality.py -v -s
+python -m pytest tests/e2e/ -v -s
 
 echo ""
 echo "📊 Integration Test Summary:"

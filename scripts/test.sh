@@ -31,7 +31,7 @@ npm run build > /dev/null 2>&1
 
 # Run Python tests
 echo "🐍 Running Python tests..."
-python -m pytest tests/test_simple_render.py tests/test_simple.py tests/test_working_flows.py -v --cov=. --cov-report=term-missing --cov-report=html
+python -m pytest tests/unit/ tests/integration/ -v --cov=. --cov-report=term-missing --cov-report=html
 
 # Run JavaScript tests
 echo "🟨 Running JavaScript tests..."

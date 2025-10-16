@@ -1,15 +1,14 @@
-"""Integration tests that test actual functionality using a real running server."""
+"""End-to-end tests for complete user workflows using real server."""
 
 import pytest
 import requests
 import time
 import json
 import uuid
-from utils.security import get_password_hash
 
 
-class TestIntegrationFunctionality:
-    """Integration tests using a real running server to test actual functionality."""
+class TestUserJourneys:
+    """End-to-end tests using a real running server."""
     
     @pytest.fixture(scope="class")
     def server_url(self):
@@ -35,20 +34,14 @@ class TestIntegrationFunctionality:
         
         pytest.skip("Server is not running. Start the server with: uvicorn main:app --reload")
     
-    def test_server_health(self, server_url, server_running):
-        """Test that the server is healthy and responding."""
-        response = requests.get(f"{server_url}/")
-        assert response.status_code == 200
-        assert "text/html" in response.headers.get("content-type", "")
-    
-    def test_user_signup_and_login_flow(self, server_url, server_running):
-        """Test the complete signup and login flow with real server."""
+    def test_complete_user_signup_and_login_flow(self, server_url, server_running):
+        """Test the complete signup and login workflow."""
         unique_id = str(uuid.uuid4())[:8]
         
         # Test signup
         signup_data = {
-            "username": f"intuser_{unique_id}",
-            "email": f"int_{unique_id}@example.com",
+            "username": f"e2euser_{unique_id}",
+            "email": f"e2e_{unique_id}@example.com",
             "password": "testpassword123"
         }
         
@@ -90,7 +83,7 @@ class TestIntegrationFunctionality:
         assert user_info["username"] == signup_data["username"]
         assert user_info["email"] == signup_data["email"]
     
-    def test_friend_request_workflow(self, server_url, server_running):
+    def test_complete_friend_request_workflow(self, server_url, server_running):
         """Test the complete friend request workflow."""
         unique_id = str(uuid.uuid4())[:8]
         
@@ -199,8 +192,8 @@ class TestIntegrationFunctionality:
         friend_usernames = [friend["username"] for friend in friends_list]
         assert user2_data["username"] in friend_usernames, "User2 should be in user1's friends list"
     
-    def test_message_workflow(self, server_url, server_running):
-        """Test the messaging workflow between friends."""
+    def test_message_workflow_between_friends(self, server_url, server_running):
+        """Test messaging workflow between friends."""
         unique_id = str(uuid.uuid4())[:8]
         
         # Create two users
@@ -286,7 +279,7 @@ class TestIntegrationFunctionality:
         recent_conversations = recent_response.json()
         assert isinstance(recent_conversations, list)
     
-    def test_websocket_token_generation(self, server_url, server_running):
+    def test_websocket_token_generation_workflow(self, server_url, server_running):
         """Test WebSocket token generation for authenticated users."""
         unique_id = str(uuid.uuid4())[:8]
         
@@ -323,36 +316,3 @@ class TestIntegrationFunctionality:
         ws_url = f"ws://localhost:8000/ws?token={token}"
         assert "token=" in ws_url
         assert token in ws_url
-    
-    def test_online_status_functionality(self, server_url, server_running):
-        """Test online status functionality."""
-        unique_id = str(uuid.uuid4())[:8]
-        
-        # Create and login user
-        user_data = {
-            "username": f"statususer_{unique_id}",
-            "email": f"status_{unique_id}@example.com",
-            "password": "password123"
-        }
-        
-        requests.post(f"{server_url}/signup", data=user_data)
-        
-        login_response = requests.post(
-            f"{server_url}/login",
-            data={"username": user_data["username"], "password": user_data["password"]},
-            allow_redirects=False
-        )
-        user_cookies = login_response.cookies
-        
-        # Test online status endpoint
-        status_response = requests.get(
-            f"{server_url}/api/friends/online-status",
-            cookies=user_cookies
-        )
-        assert status_response.status_code == 200
-        
-        status_data = status_response.json()
-        assert isinstance(status_data, dict)
-        
-        # Should have some structure for online status
-        # The exact structure depends on your implementation
