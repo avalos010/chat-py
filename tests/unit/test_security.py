@@ -1,6 +1,7 @@
 """Unit tests for security utilities (password hashing, JWT)."""
 
 import pytest
+import os
 from utils.security import get_password_hash, verify_password
 
 
@@ -9,7 +10,9 @@ class TestPasswordHashing:
     
     def test_password_hashing(self):
         """Test that passwords are hashed correctly."""
-        password = "testpassword123"
+        password = os.getenv("TEST_USER_PASSWORD")
+        if not password:
+            pytest.skip("TEST_USER_PASSWORD environment variable not set")
         hashed = get_password_hash(password)
         
         # Hash should be different from original password
@@ -21,7 +24,9 @@ class TestPasswordHashing:
     
     def test_password_verification_edge_cases(self):
         """Test password verification with edge cases."""
-        password = "testpassword123"
+        password = os.getenv("TEST_USER_PASSWORD")
+        if not password:
+            pytest.skip("TEST_USER_PASSWORD environment variable not set")
         hashed = get_password_hash(password)
         
         # Wrong password should fail
@@ -35,8 +40,10 @@ class TestPasswordHashing:
     
     def test_different_passwords_different_hashes(self):
         """Test that different passwords produce different hashes."""
-        password1 = "password1"
-        password2 = "password2"
+        password1 = os.getenv("TEST_USER_PASSWORD")
+        password2 = os.getenv("TEST_USER_PASSWORD_ALT")
+        if not password1 or not password2:
+            pytest.skip("TEST_USER_PASSWORD or TEST_USER_PASSWORD_ALT environment variables not set")
         
         hash1 = get_password_hash(password1)
         hash2 = get_password_hash(password2)

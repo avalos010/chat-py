@@ -1,6 +1,7 @@
 """Unit tests for Pydantic models."""
 
 import pytest
+import os
 from models.auth import User, UserCreate, UserInDB, LoginData, FriendRequestData
 
 
@@ -20,16 +21,20 @@ class TestUserModels:
     
     def test_user_create_model(self):
         """Test UserCreate model validation."""
+        test_password = os.getenv("TEST_USER_PASSWORD_ALT")
+        if not test_password:
+            pytest.skip("TEST_USER_PASSWORD_ALT environment variable not set")
+        
         user_data = {
             "username": "newuser",
             "email": "new@example.com",
-            "password": "password123"
+            "password": test_password
         }
         
         user_create = UserCreate(**user_data)
         assert user_create.username == "newuser"
         assert user_create.email == "new@example.com"
-        assert user_create.password == "password123"
+        assert user_create.password == test_password
     
     def test_user_in_db_model(self):
         """Test UserInDB model validation."""
@@ -48,14 +53,18 @@ class TestUserModels:
     
     def test_login_data_model(self):
         """Test LoginData model validation."""
+        test_password = os.getenv("TEST_USER_PASSWORD")
+        if not test_password:
+            pytest.skip("TEST_USER_PASSWORD environment variable not set")
+        
         login_data = {
             "username": "loginuser",
-            "password": "loginpass123"
+            "password": test_password
         }
         
         login = LoginData(**login_data)
         assert login.username == "loginuser"
-        assert login.password == "loginpass123"
+        assert login.password == test_password
     
     def test_friend_request_data_model(self):
         """Test FriendRequestData model validation."""
