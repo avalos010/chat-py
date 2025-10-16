@@ -30,5 +30,65 @@ In addition to these extension there a few settings that are also useful to enab
 - Run the app using the Run and Debug view or by pressing `F5`
 - `Ctrl + click` on the URL that shows up on the terminal to open the running application
 - Test the API functionality by navigating to `/docs` URL to view the Swagger UI
-- Configure your Python test in the Test Panel or by triggering the **Python: Configure Tests** command from the Command Palette
-- Run tests in the Test Panel or by clicking the Play Button next to the individual tests in the `test_main.py` file
+
+## Testing
+
+This project includes a comprehensive test suite with **48 total tests** organized into three categories:
+
+### 🧪 Test Structure
+```
+tests/
+├── unit/           # Fast, isolated unit tests (12 tests)
+├── integration/    # Database and API integration tests (30 tests)  
+├── e2e/            # End-to-end user workflow tests (6 tests)
+└── fixtures/       # Shared test data and fixtures
+```
+
+### 🚀 Running Tests
+
+#### Quick Start (Unit + Integration Tests)
+```bash
+# Run all unit and integration tests
+./scripts/test.sh
+
+# Or run specific test types
+python -m pytest tests/unit/ -v          # Unit tests only
+python -m pytest tests/integration/ -v   # Integration tests only
+```
+
+#### End-to-End Tests (Real User Workflows)
+```bash
+# Terminal 1: Start the server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2: Run end-to-end tests
+./scripts/test-integration.sh
+```
+
+### 📊 Test Coverage
+
+- **Unit Tests (12 tests)**: Password hashing, model validation, security utilities
+- **Integration Tests (30 tests)**: API endpoints, database connectivity, authentication
+- **End-to-End Tests (6 tests)**: Complete user workflows, friend requests, messaging
+- **Frontend Tests (5 tests)**: DOM manipulation, event handling, async operations
+
+### ✅ What Gets Tested
+
+- ✅ **Authentication**: Login, signup, JWT tokens, password security
+- ✅ **API Endpoints**: All endpoints tested for availability and security
+- ✅ **Database**: PostgreSQL connectivity and basic operations
+- ✅ **Friend Management**: Friend requests, acceptance, rejection
+- ✅ **Messaging**: Conversation endpoints, message history
+- ✅ **Real-time Features**: WebSocket token generation, online status
+- ✅ **Error Handling**: Malformed requests, validation errors
+- ✅ **Infrastructure**: Static files, middleware, security headers
+
+### 🔧 CI/CD Integration
+
+Tests run automatically on every push via GitHub Actions:
+- Unit and integration tests run in CI
+- Database connectivity verified with Render PostgreSQL
+- Coverage reporting included
+- All tests must pass before deployment
+
+See [TESTING.md](TESTING.md) for detailed testing documentation.

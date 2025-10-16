@@ -1,4 +1,3 @@
-import { protectRoute } from "./auth.js";
 import { ParticleBackground } from "./particles.js";
 
 interface Contact {
@@ -37,7 +36,11 @@ class HomePageManager {
 
   private async loadContent(): Promise<void> {
     // Prefer cookie-based auth; fallback to localStorage for backward compatibility
-    const cookieToken = document.cookie.split("; ").find(c => c.startsWith("auth_token="))?.split("=")[1] || null;
+    const cookieToken =
+      document.cookie
+        .split("; ")
+        .find((c) => c.startsWith("auth_token="))
+        ?.split("=")[1] || null;
     const token = cookieToken || localStorage.getItem("token");
 
     if (token) {

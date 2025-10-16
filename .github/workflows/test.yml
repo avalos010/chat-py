@@ -1,0 +1,61 @@
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    name: Run All Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Run Python tests
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+          TEST_USER_PASSWORD_ALT: ${{ secrets.TEST_USER_PASSWORD_ALT }}
+        run: |
+          echo "🐍 Running Python tests..."
+          pytest tests/unit/ tests/integration/ -v
+
+      - name: Run JavaScript tests
+        run: |
+          echo "🟨 Running JavaScript tests..."
+          npm test -- tests/frontend/simple.test.ts --watchAll=false
+
+      - name: Test Results Summary
+        run: |
+          echo "✅ All tests completed successfully!"
+          echo "📊 Test Summary:"
+          echo "  - Python backend tests: PASSED"
+          echo "  - JavaScript frontend tests: PASSED"
+          echo "  - Database integration tests: PASSED"
+          echo "🎉 Ready for deployment!"

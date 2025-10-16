@@ -21,6 +21,10 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    # Handle None or empty passwords
+    if not plain_password or not hashed_password:
+        return False
+    
     # Truncate password to 72 bytes for bcrypt compatibility
     password_bytes = plain_password.encode('utf-8')[:72]
     hashed_bytes = hashed_password.encode('utf-8') if isinstance(hashed_password, str) else hashed_password
