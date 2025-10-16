@@ -293,9 +293,11 @@ dist
 *.sqlite
 *.sqlite3
 
-# Test files
+# Test files (but allow tests in tests/ directory)
 test_*.py
 *_test.py
+!/tests/test_*.py
+!/tests/*_test.py
 
 # IDE files
 .vscode/

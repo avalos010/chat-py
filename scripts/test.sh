@@ -31,7 +31,7 @@ npm run build > /dev/null 2>&1
 
 # Run Python tests
 echo "🐍 Running Python tests..."
-python -m pytest tests/test_simple_render.py tests/test_simple.py -v --cov=. --cov-report=term-missing --cov-report=html
+python -m pytest tests/test_simple_render.py tests/test_simple.py tests/test_working_flows.py -v --cov=. --cov-report=term-missing --cov-report=html
 
 # Run JavaScript tests
 echo "🟨 Running JavaScript tests..."
@@ -44,6 +44,10 @@ echo "   - JavaScript: coverage/lcov-report/index.html"
 
 echo ""
 echo "✅ All tests completed!"
+echo ""
+echo "🚀 For testing actual functionality (messaging, friend requests):"
+echo "   1. Start server: uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+echo "   2. Run integration tests: ./scripts/test-integration.sh"
 echo ""
 echo "🚀 GitHub Actions Setup:"
 echo "   1. Add DATABASE_URL as a repository secret"

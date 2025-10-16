@@ -6,7 +6,6 @@ import asyncio
 import os
 from typing import AsyncGenerator, Generator
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -47,16 +46,9 @@ async def test_db() -> AsyncGenerator[Database, None]:
     await db.close()
 
 
-@pytest_asyncio.fixture
-async def client(test_db: Database) -> AsyncGenerator[AsyncClient, None]:
-    """Create a test client with the Render PostgreSQL database."""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
-
-
 @pytest.fixture
-def sync_client(test_db: Database) -> TestClient:
-    """Create a synchronous test client."""
+def client(test_db: Database) -> TestClient:
+    """Create a test client with the Render PostgreSQL database."""
     return TestClient(app)
 
 
@@ -84,11 +76,11 @@ async def test_user(test_db: Database) -> dict:
     }
 
 
-@pytest_asyncio.fixture
-async def auth_headers(client: AsyncClient, test_user: dict) -> dict:
+@pytest.fixture
+def auth_headers(client: TestClient, test_user: dict) -> dict:
     """Create authentication headers for a test user."""
     # Login to get token
-    response = await client.post("/login", data={
+    response = client.post("/login", data={
         "username": test_user["username"],
         "password": test_user["password"]
     })
